@@ -5,10 +5,13 @@ import { useCopyStyles } from "@/hooks/use-copy-styles";
 import { mergeRefs } from "@/lib/merge-refs";
 import { cn } from "@/lib/utils";
 import { ViewLayer } from "~/layers";
-import { createContext, useContext, useEffect, useLayoutEffect, useMemo, useRef } from "react";
+import { createContext, RefObject, useContext, useEffect, useLayoutEffect, useMemo, useRef } from "react";
 import { createPortal } from "react-dom";
 
+type PortalBodyRef = RefObject<HTMLElement | null> | ((body: HTMLElement | null) => void);
+
 interface PortalComponentProps extends React.ComponentProps<"div"> {
+  portalBodyRef?: PortalBodyRef;
   visible?: boolean;
   zIndex?: number;
   autoFocus?: boolean;
@@ -40,6 +43,7 @@ export function PortalComponent({
   className,
   children,
   ref,
+  portalBodyRef,
   ...args
 }: PortalComponentProps) {
   const { usePortal } = usePortalsProvider();
@@ -60,6 +64,21 @@ export function PortalComponent({
 
   // Copy styles from parent window to portal window
   useCopyStyles(portal?.window ?? null);
+
+  // Keep portalBodyRef in sync with the portal window's document body
+  useEffect(() => {
+    if (!portal?.window) return;
+    if (!portalBodyRef) return;
+    const body = portal.window.document.body;
+    if (typeof portalBodyRef === "function") {
+      portalBodyRef(body);
+      return () => portalBodyRef(null);
+    }
+    portalBodyRef.current = body;
+    return () => {
+      portalBodyRef.current = null;
+    };
+  }, [portal, portalBodyRef]);
 
   const portalChildren = useMemo(() => {
     const contextValue: PortalContextValue = {

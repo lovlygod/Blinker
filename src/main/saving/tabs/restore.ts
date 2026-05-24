@@ -1,6 +1,7 @@
 import { tabService, tabPersistenceService } from "@/services/tab-service";
 import { onSettingsCached, getSettingValueById } from "@/saving/settings";
 import { browserWindowsController } from "@/controllers/windows-controller/interfaces/browser";
+import { loadedProfilesController } from "@/controllers/loaded-profiles-controller";
 import { app } from "electron";
 import type { BrowserWindowCreationOptions, BrowserWindowType } from "@/controllers/windows-controller/types/browser";
 import type { PersistedTabData, PersistedTabLayoutNodeData } from "~/types/tab-service";
@@ -59,6 +60,12 @@ async function createTabsFromPersistedData(tabDatas: PersistedTabData[]): Promis
     windowGroups.get(groupId)!.push(tabData);
   }
 
+  // Pre-load all required profiles before creating tabs
+  const profileIds = new Set(tabDatas.map((t) => t.profileId));
+  for (const profileId of profileIds) {
+    await loadedProfilesController.load(profileId);
+  }
+
   // Load persisted layout nodes and window states
   const persistedNodes = tabPersistenceService.loadAllLayoutNodes();
   const windowStates = tabPersistenceService.loadAllWindowStates();
@@ -79,6 +86,12 @@ async function createTabsFromPersistedData(tabDatas: PersistedTabData[]): Promis
     const window = await browserWindowsController.create(windowType, windowOptions);
 
     for (const tabData of tabs) {
+      // Skip tabs whose profile couldn't be loaded (e.g. deleted profile)
+      if (!loadedProfilesController.get(tabData.profileId)) {
+        tabPersistenceService.removeTab(tabData.uniqueId);
+        continue;
+      }
+
       const tab = tabService.createTabInternal(window.id, tabData.profileId, tabData.spaceId, undefined, {
         asleep: true,
         createdAt: tabData.createdAt,

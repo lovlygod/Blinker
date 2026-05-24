@@ -159,7 +159,7 @@ export class TabService extends TypedEventEmitter<TabServiceEvents> {
     layout.createSingleNode(tab);
 
     // Wire up tab events
-    this.wireTabEvents(tab, layout);
+    this.wireTabEvents(tab);
 
     // Load initial URL if needed
     if (tab._needsInitialLoad && options.noLoadURL !== true) {
@@ -648,7 +648,7 @@ export class TabService extends TypedEventEmitter<TabServiceEvents> {
 
   // --- Private Methods ---
 
-  private wireTabEvents(tab: Tab, layout: TabLayout): void {
+  private wireTabEvents(tab: Tab): void {
     tab.on("updated", () => {
       if (quitController.isQuitting) return;
       this.emitContentChange(tab.getWindow().id, tab.id);
@@ -668,8 +668,9 @@ export class TabService extends TypedEventEmitter<TabServiceEvents> {
     });
 
     tab.on("focused", () => {
-      if (this.isTabActive(tab)) {
-        layout.setFocusedTab(tab.spaceId, tab);
+      const currentLayout = this.layouts.get(tab.getWindow().id);
+      if (currentLayout && this.isTabActive(tab)) {
+        currentLayout.setFocusedTab(tab.spaceId, tab);
       }
     });
 
@@ -685,8 +686,20 @@ export class TabService extends TypedEventEmitter<TabServiceEvents> {
 
       const windowId = tab.getWindow().id;
       const spaceId = tab.spaceId;
-      const wasActive = this.isTabActive(tab);
       const position = tab.position;
+      const currentLayout = this.layouts.get(windowId);
+
+      // Determine if tab was active. The once("destroyed") listener from
+      // TabLayoutNode.addTab may have already removed the tab from its node
+      // (and auto-destroyed the node), so also check if the active node is
+      // destroyed — that means this tab was its last occupant.
+      let wasActive = false;
+      if (currentLayout) {
+        const activeNode = currentLayout.getActiveNode(spaceId);
+        if (activeNode) {
+          wasActive = activeNode.hasTab(tab.id) || activeNode.isDestroyed;
+        }
+      }
 
       // Clean up pinned tab association
       const pinnedTab = this.getPinnedTabByAssociatedTabId(tab.id);
@@ -694,10 +707,12 @@ export class TabService extends TypedEventEmitter<TabServiceEvents> {
         pinnedTab.dissociateByTabId(tab.id);
       }
 
-      // Remove from layout node
-      const node = layout.getNodeForTab(tab.id);
-      if (node) {
-        node.removeTab(tab);
+      // Remove from layout node (may already be removed by once listener)
+      if (currentLayout) {
+        const node = currentLayout.getNodeForTab(tab.id);
+        if (node) {
+          node.removeTab(tab);
+        }
       }
 
       // Remove from tracking
@@ -705,8 +720,8 @@ export class TabService extends TypedEventEmitter<TabServiceEvents> {
       this.emit("tab-removed", tab);
 
       // Handle active tab selection
-      if (wasActive) {
-        layout.removeActiveAndSelectNext(spaceId, position);
+      if (wasActive && currentLayout) {
+        currentLayout.removeActiveAndSelectNext(spaceId, position);
       }
 
       this.emitStructuralChange(windowId);

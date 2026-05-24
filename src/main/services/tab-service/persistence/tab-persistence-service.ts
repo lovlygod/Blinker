@@ -122,10 +122,6 @@ export class TabPersistenceService {
     const removedIds = [...this.removedTabs];
     const windowStates = [...this.dirtyWindowStates.entries()];
 
-    this.dirtyTabs.clear();
-    this.removedTabs.clear();
-    this.dirtyWindowStates.clear();
-
     const db = getDb();
     db.transaction((tx) => {
       // Upsert dirty tabs
@@ -164,6 +160,18 @@ export class TabPersistenceService {
           .run();
       }
     });
+
+    // Clear dirty state only after successful transaction.
+    // This ensures no data loss if the transaction throws.
+    for (const [uniqueId] of dirtyEntries) {
+      this.dirtyTabs.delete(uniqueId);
+    }
+    for (const uniqueId of removedIds) {
+      this.removedTabs.delete(uniqueId);
+    }
+    for (const [windowGroupId] of windowStates) {
+      this.dirtyWindowStates.delete(windowGroupId);
+    }
   }
 
   // --- Load ---

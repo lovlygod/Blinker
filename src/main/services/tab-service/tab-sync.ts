@@ -292,6 +292,17 @@ export function relocateTabsFromClosingWindow(closingWindow: BrowserWindow, tabs
     }
   }
 
+  // Activate a tab in target windows so the UI shows something
+  for (const targetWindow of relocatable.keys()) {
+    const targetSpaceId = targetWindow.currentSpaceId;
+    if (targetSpaceId) {
+      const focusedTab = tabService.getFocusedTab(targetWindow.id, targetSpaceId);
+      if (focusedTab) {
+        tabService.activateTab(focusedTab);
+      }
+    }
+  }
+
   return unrelocatable;
 }
 

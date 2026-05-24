@@ -75,6 +75,8 @@ export interface TabCreationOptions {
   navHistoryIndex?: number;
   noLoadURL?: boolean;
   typedNavigation?: boolean;
+  /** If false, the tab won't be activated after creation (default: true) */
+  makeActive?: boolean;
 }
 
 function createWebContentsView(session: Session, options: Electron.WebContentsViewConstructorOptions): WebContentsView {
@@ -364,6 +366,8 @@ export class Tab extends TypedEventEmitter<TabEvents> {
     if (this.navHistory.length > 0) {
       this.restoreNavigationHistory(this.navHistory, this.navHistoryIndex);
     }
+
+    this.applyUrlBackground();
   }
 
   // --- Picture in Picture ---
@@ -429,6 +433,35 @@ export class Tab extends TypedEventEmitter<TabEvents> {
       console.error("PiP exit error:", err);
       return false;
     }
+  }
+
+  // --- Fullscreen ---
+
+  public setFullScreen(isFullScreen: boolean): void {
+    const updated = this.updateStateProperty("fullScreen", isFullScreen);
+    if (!updated) return;
+
+    const window = this.getWindow();
+    if (window.destroyed) return;
+    const electronWindow = window.browserWindow;
+
+    if (isFullScreen) {
+      if (!electronWindow.fullScreen) {
+        electronWindow.setFullScreen(true);
+      }
+    } else {
+      if (electronWindow.fullScreen) {
+        electronWindow.setFullScreen(false);
+      }
+      // Force Chromium to exit fullscreen mode and recognize the viewport change
+      if (this.webContents && !this.webContents.isDestroyed()) {
+        this.webContents.executeJavaScript(
+          `if (document.fullscreenElement) { document.exitFullscreen(); }`,
+          true
+        );
+      }
+    }
+    this.emit("fullscreen-changed", isFullScreen);
   }
 
   // --- State Updates ---
@@ -665,12 +698,10 @@ export class Tab extends TypedEventEmitter<TabEvents> {
 
     // Fullscreen
     wc.on("enter-html-full-screen", () => {
-      this.updateStateProperty("fullScreen", true);
-      this.emit("fullscreen-changed", true);
+      this.setFullScreen(true);
     });
     wc.on("leave-html-full-screen", () => {
-      this.updateStateProperty("fullScreen", false);
-      this.emit("fullscreen-changed", false);
+      this.setFullScreen(false);
     });
   }
 }

@@ -15,6 +15,7 @@ import {
 import { Tab } from "../core/tab";
 import { TabLayoutNode } from "../core/tab-layout-node";
 import { PinnedTab } from "../core/pinned-tab";
+import { isTabSyncEnabled, isSyncExcludedTab } from "../tab-sync";
 
 const DEBOUNCE_MS = 80;
 
@@ -50,19 +51,11 @@ export class TabIPC {
 
   private setupEventListeners(): void {
     this.tabService.on("structural-change", (windowId) => {
-      this.structuralQueue.add(windowId);
-      this.scheduleProcessing();
+      this.enqueueStructuralChange(windowId);
     });
 
     this.tabService.on("content-change", (windowId, tabId) => {
-      if (this.structuralQueue.has(windowId)) return;
-      let tabIds = this.contentQueue.get(windowId);
-      if (!tabIds) {
-        tabIds = new Set();
-        this.contentQueue.set(windowId, tabIds);
-      }
-      tabIds.add(tabId);
-      this.scheduleProcessing();
+      this.enqueueContentChange(windowId, tabId);
     });
 
     this.tabService.on("pinned-tab-changed", () => {
@@ -76,6 +69,61 @@ export class TabIPC {
       this.processQueues();
       this.queueTimeout = null;
     }, DEBOUNCE_MS);
+  }
+
+  /**
+   * Enqueue a structural change. When tab sync is enabled, all browser
+   * windows need a refresh because they share the same tab list.
+   */
+  private enqueueStructuralChange(windowId: number): void {
+    if (isTabSyncEnabled()) {
+      for (const win of browserWindowsController.getWindows()) {
+        if (win.browserWindowType === "normal") {
+          this.structuralQueue.add(win.id);
+        }
+      }
+    } else {
+      this.structuralQueue.add(windowId);
+    }
+    this.scheduleProcessing();
+  }
+
+  /**
+   * Enqueue a content-only change. When tab sync is enabled, non-excluded
+   * tab changes are broadcast to all windows. Pinned-tab-owned tabs always
+   * broadcast regardless of sync setting (they are always-sync).
+   */
+  private enqueueContentChange(windowId: number, tabId: number): void {
+    let targetWindowIds: number[];
+    const tab = this.tabService.getTabById(tabId);
+
+    const shouldBroadcast = (() => {
+      if (isTabSyncEnabled()) {
+        return !(tab && isSyncExcludedTab(tab));
+      }
+      // Pinned-tab-owned tabs always broadcast (they are always-sync)
+      return tab?.owner.kind === "pinned";
+    })();
+
+    if (shouldBroadcast) {
+      targetWindowIds = browserWindowsController
+        .getWindows()
+        .filter((w) => w.browserWindowType === "normal")
+        .map((w) => w.id);
+    } else {
+      targetWindowIds = [windowId];
+    }
+
+    for (const targetId of targetWindowIds) {
+      if (this.structuralQueue.has(targetId)) continue;
+      let tabIds = this.contentQueue.get(targetId);
+      if (!tabIds) {
+        tabIds = new Set();
+        this.contentQueue.set(targetId, tabIds);
+      }
+      tabIds.add(tabId);
+    }
+    this.scheduleProcessing();
   }
 
   private processQueues(): void {
@@ -310,23 +358,60 @@ export class TabIPC {
 
   // --- Serialization ---
 
+  /**
+   * Build the WindowTabsPayload for a given window.
+   *
+   * When "Sync Tabs Across Windows" is enabled, this returns ALL tabs across
+   * all normal windows (excluding internal-profile/popup tabs from other
+   * windows). This allows the renderer sidebar to show a unified tab list.
+   *
+   * When sync is disabled, only the window's own tabs are returned.
+   */
   private getWindowTabsPayload(window: BrowserWindow): WindowTabsPayload {
     const windowId = window.id;
-    const tabs = this.tabService.getTabsInWindow(windowId);
+    const syncEnabled = isTabSyncEnabled() && window.browserWindowType === "normal";
+
+    // Determine which tabs to include
+    let tabs: Tab[];
+    if (syncEnabled) {
+      tabs = [...this.tabService.tabs.values()].filter((tab) => {
+        if (tab.getWindow().id === windowId) return true;
+        return !isSyncExcludedTab(tab);
+      });
+    } else {
+      tabs = this.tabService.getTabsInWindow(windowId);
+    }
+
     const layout = this.tabService.layouts.get(windowId);
 
-    // Filter out ephemeral tabs from the sidebar list
-    const visibleTabs = tabs.filter((t) => t.owner.kind === "normal");
-    const tabDatas = visibleTabs.map((tab) => this.serializeTabForRenderer(tab));
+    // Include ALL tabs in the payload (pinned-tab-owned tabs need their loading
+    // state available to the renderer for the pin grid). The renderer filters
+    // out non-normal-owned tabs when building the sidebar tab list.
+    const tabDatas = tabs.map((tab) => this.serializeTabForRenderer(tab));
 
-    // Collect layout nodes
+    // Collect layout nodes from all relevant windows
     const layoutNodes: TabLayoutNodeData[] = [];
-    if (layout) {
+    if (syncEnabled) {
+      // Include layout nodes from all windows that have tabs we're showing
+      const relevantWindowIds = new Set(tabs.map((t) => t.getWindow().id));
+      for (const relWindowId of relevantWindowIds) {
+        const relLayout = this.tabService.layouts.get(relWindowId);
+        if (!relLayout) continue;
+        const spaces = new Set(tabs.filter((t) => t.getWindow().id === relWindowId).map((t) => t.spaceId));
+        for (const spaceId of spaces) {
+          const nodes = relLayout.getNodesInSpace(spaceId);
+          for (const node of nodes) {
+            if (node.mode !== "single") {
+              layoutNodes.push(this.serializeLayoutNode(node));
+            }
+          }
+        }
+      }
+    } else if (layout) {
       const spaces = new Set(tabs.map((t) => t.spaceId));
       for (const spaceId of spaces) {
         const nodes = layout.getNodesInSpace(spaceId);
         for (const node of nodes) {
-          // Only include multi-tab nodes (single nodes are implicit)
           if (node.mode !== "single") {
             layoutNodes.push(this.serializeLayoutNode(node));
           }
@@ -334,7 +419,7 @@ export class TabIPC {
       }
     }
 
-    // Focused and active maps
+    // Focused and active maps — always from this window's layout
     const focusedTabIds: WindowFocusedTabIds = {};
     const activeLayoutNodeIds: WindowActiveLayoutNodeIds = {};
 

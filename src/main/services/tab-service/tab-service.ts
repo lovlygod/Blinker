@@ -21,6 +21,8 @@ import { quitController } from "@/controllers/quit-controller";
 import { setWindowSpace } from "@/ipc/session/spaces";
 import { getDb, schema } from "@/saving/db";
 import { eq } from "drizzle-orm";
+import { getSettingValueById } from "@/saving/settings";
+import { SleepTabValueMap } from "@/modules/basic-settings";
 
 export const NEW_TAB_URL = "flow://new-tab";
 
@@ -109,6 +111,70 @@ export class TabService extends TypedEventEmitter<TabServiceEvents> {
   private deletePinnedTabFromDb(uniqueId: string): void {
     const db = getDb();
     db.delete(schema.pinnedTabs).where(eq(schema.pinnedTabs.uniqueId, uniqueId)).run();
+  }
+
+  /**
+   * Start background tasks: space-deletion cleanup & auto-sleep/archive timer.
+   * Called once during initialization.
+   */
+  public startBackgroundTasks(): void {
+    // Destroy tabs when their space is deleted
+    spacesController.on("space-deleted", (_profileId, spaceId) => {
+      if (quitController.isQuitting) return;
+      const tabs = this.getTabsInSpace(spaceId);
+      for (const tab of tabs) {
+        tab.destroy();
+      }
+    });
+
+    // Auto-sleep/archive interval (every 10s)
+    setInterval(() => {
+      if (quitController.isQuitting) return;
+      const now = Date.now();
+
+      for (const tab of this.tabs.values()) {
+        if (tab.owner.kind !== "normal") continue;
+        if (tab.visible) continue;
+
+        // Auto-archive (destroy) tabs inactive too long
+        const archiveAfter = getSettingValueById("archiveTabAfter");
+        if (typeof archiveAfter === "string" && archiveAfter !== "never") {
+          const archiveMs = this.parseDurationToMs(archiveAfter);
+          if (archiveMs > 0 && now - tab.lastActiveAt >= archiveMs) {
+            tab.destroy();
+            continue;
+          }
+        }
+
+        // Auto-sleep tabs inactive past threshold
+        if (!tab.asleep) {
+          const sleepAfter = getSettingValueById("sleepTabAfter");
+          if (typeof sleepAfter === "string" && sleepAfter !== "never") {
+            const sleepSeconds = SleepTabValueMap[sleepAfter as keyof typeof SleepTabValueMap];
+            if (typeof sleepSeconds === "number" && now - tab.lastActiveAt >= sleepSeconds * 1000) {
+              tab.putToSleep();
+            }
+          }
+        }
+      }
+    }, 10_000);
+  }
+
+  private parseDurationToMs(value: string): number {
+    // Matches patterns like "5m", "30m", "1h", "12h", "1d", "7d"
+    const match = value.match(/^(\d+)(m|h|d)$/);
+    if (!match) return 0;
+    const num = parseInt(match[1], 10);
+    switch (match[2]) {
+      case "m":
+        return num * 60 * 1000;
+      case "h":
+        return num * 60 * 60 * 1000;
+      case "d":
+        return num * 24 * 60 * 60 * 1000;
+      default:
+        return 0;
+    }
   }
 
   // --- Tab Creation ---
@@ -222,8 +288,10 @@ export class TabService extends TypedEventEmitter<TabServiceEvents> {
     // Wire up tab events
     this.wireTabEvents(tab);
 
-    // Activate the new tab (makes it visible)
-    this.activateTab(tab);
+    // Activate the new tab unless explicitly suppressed
+    if (options.makeActive !== false) {
+      this.activateTab(tab);
+    }
 
     // Load initial URL if needed
     if (tab._needsInitialLoad && options.noLoadURL !== true) {
@@ -719,6 +787,20 @@ export class TabService extends TypedEventEmitter<TabServiceEvents> {
       layout.on("focused-tab-changed", (wId, spaceId) => {
         this.emit("focused-tab-changed", wId, spaceId);
       });
+
+      // Exit tab fullscreen when OS window exits fullscreen
+      const window = browserWindowsController.getWindowById(windowId);
+      if (window) {
+        window.on("leave-full-screen", () => {
+          const currentSpaceId = window.currentSpaceId;
+          if (!currentSpaceId) return;
+          for (const tab of this.getTabsInWindowSpace(windowId, currentSpaceId)) {
+            if (tab.fullScreen) {
+              tab.setFullScreen(false);
+            }
+          }
+        });
+      }
     }
     return layout;
   }
@@ -747,6 +829,10 @@ export class TabService extends TypedEventEmitter<TabServiceEvents> {
     for (const tab of tabsInSpace) {
       const shouldBeVisible = activeNode !== undefined && activeNode.hasTab(tab.id);
       if (tab.visible !== shouldBeVisible) {
+        // Exit fullscreen when a tab is being hidden
+        if (!shouldBeVisible && tab.fullScreen) {
+          tab.setFullScreen(false);
+        }
         tab.visible = shouldBeVisible;
         tab.layer?.setVisible(shouldBeVisible);
       }
@@ -766,6 +852,9 @@ export class TabService extends TypedEventEmitter<TabServiceEvents> {
       const oldTabs = this.getTabsInWindowSpace(windowId, oldSpaceId);
       for (const tab of oldTabs) {
         if (tab.visible) {
+          if (tab.fullScreen) {
+            tab.setFullScreen(false);
+          }
           tab.visible = false;
           tab.layer?.setVisible(false);
         }
@@ -874,6 +963,11 @@ export class TabService extends TypedEventEmitter<TabServiceEvents> {
       }
     });
 
+    tab.on("fullscreen-changed", () => {
+      if (quitController.isQuitting) return;
+      this.handlePageBoundsChanged(tab.getWindow().id);
+    });
+
     tab.on("target-url-changed", (url) => {
       if (quitController.isQuitting) return;
       const window = tab.getWindow();
@@ -941,7 +1035,48 @@ export class TabService extends TypedEventEmitter<TabServiceEvents> {
       }
 
       this.emitStructuralChange(windowId);
+
+      // Auto-close empty popup windows
+      this.reconcilePopupWindow(windowId);
     });
+  }
+
+  /**
+   * If a popup window has no tabs left, close it. Otherwise, activate
+   * the best remaining tab.
+   */
+  private reconcilePopupWindow(windowId: number): void {
+    if (quitController.isQuitting) return;
+    const window = browserWindowsController.getWindowById(windowId);
+    if (!window || window.destroyed || window.browserWindowType !== "popup") return;
+
+    const tabsInWindow = this.getTabsInWindow(windowId);
+    if (tabsInWindow.length === 0) {
+      setImmediate(() => {
+        const latestWindow = browserWindowsController.getWindowById(windowId);
+        if (!latestWindow || latestWindow.destroyed || latestWindow.browserWindowType !== "popup") return;
+        if (this.getTabsInWindow(windowId).length > 0) return;
+        latestWindow.close();
+      });
+      return;
+    }
+
+    // If there's no active tab, activate the most recently active one
+    const layout = this.layouts.get(windowId);
+    if (!layout) return;
+    const currentSpaceId = window.currentSpaceId;
+    if (!currentSpaceId) return;
+    const activeNode = layout.getActiveNode(currentSpaceId);
+    if (activeNode) return;
+
+    // Find the best tab to activate
+    const spaceTabs = tabsInWindow
+      .filter((t) => t.spaceId === currentSpaceId)
+      .sort((a, b) => b.lastActiveAt - a.lastActiveAt);
+    const bestTab = spaceTabs[0] ?? tabsInWindow.sort((a, b) => b.lastActiveAt - a.lastActiveAt)[0];
+    if (bestTab) {
+      this.activateTab(bestTab);
+    }
   }
 
   private handleNewTabRequested(
@@ -976,10 +1111,12 @@ export class TabService extends TypedEventEmitter<TabServiceEvents> {
 
     const insertPosition = disposition !== "new-window" ? sourceTab.position + 0.5 : undefined;
 
+    const isBackground = disposition === "background-tab";
     const newTab = this.createTabInternal(windowId, sourceTab.profileId, sourceTab.spaceId, undefined, {
       url,
       noLoadURL: options.noLoadURL,
-      position: insertPosition
+      position: insertPosition,
+      makeActive: !isBackground
     });
 
     if (insertPosition !== undefined) {
@@ -987,10 +1124,6 @@ export class TabService extends TypedEventEmitter<TabServiceEvents> {
     }
 
     sourceTab._lastCreatedWebContents = newTab.webContents;
-
-    if (disposition === "foreground-tab" || disposition === "new-window") {
-      this.activateTab(newTab);
-    }
   }
 
   private wirePinnedTabEvents(pinnedTab: PinnedTab): void {

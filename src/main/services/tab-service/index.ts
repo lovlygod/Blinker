@@ -50,6 +50,7 @@ export const tabIPC = new TabIPC(tabService);
  */
 export function initializeTabService(): void {
   tabService.loadPinnedTabs();
+  tabService.startBackgroundTasks();
   tabPersistenceService.start();
   tabIPC.initialize();
   initTabSync();

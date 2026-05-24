@@ -273,9 +273,11 @@ export const TabsProvider = ({ children }: TabsProviderProps) => {
         });
       }
 
-      // Create synthetic single-tab groups for tabs not in any multi-tab node
+      // Create synthetic single-tab groups for tabs not in any multi-tab node.
+      // Skip pinned/bookmark-owned tabs — they appear in the pin grid, not the sidebar.
       for (const tab of tabsData.tabs) {
         if (tabsInNodes.has(tab.id)) continue;
+        if (tab.owner.kind !== "normal") continue;
         allGroupDatas.push({
           id: `s-${tab.uniqueId}`,
           mode: "single",

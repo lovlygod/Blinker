@@ -20,10 +20,6 @@ let nextTabId = 1;
 
 // --- Types ---
 
-interface PatchedWebContentsView extends WebContentsView {
-  destroy: () => void;
-}
-
 type TabStateProperty =
   | "visible"
   | "isDestroyed"
@@ -79,10 +75,7 @@ export interface TabCreationOptions {
   typedNavigation?: boolean;
 }
 
-function createWebContentsView(
-  session: Session,
-  options: Electron.WebContentsViewConstructorOptions
-): PatchedWebContentsView {
+function createWebContentsView(session: Session, options: Electron.WebContentsViewConstructorOptions): WebContentsView {
   const webContents = options.webContents;
   const webPreferences: WebPreferences = {
     ...(options.webPreferences || {}),
@@ -104,7 +97,7 @@ function createWebContentsView(
   });
 
   webContentsView.setVisible(false);
-  return webContentsView as PatchedWebContentsView;
+  return webContentsView;
 }
 
 // Background colors
@@ -160,9 +153,9 @@ export class Tab extends TypedEventEmitter<TabEvents> {
   private _updatePending: boolean = false;
 
   // View & content objects (nullable when asleep)
-  public view: PatchedWebContentsView | null = null;
+  public view: WebContentsView | null = null;
   public webContents: WebContents | null = null;
-  public layer: Layer<PatchedWebContentsView> | null = null;
+  public layer: Layer<WebContentsView> | null = null;
 
   // Private
   private readonly session: Session;
@@ -324,8 +317,10 @@ export class Tab extends TypedEventEmitter<TabEvents> {
       this.layer = null;
     }
 
-    // Destroy view
-    this.view.destroy();
+    // Close webContents (this effectively destroys the view)
+    if (this.webContents && !this.webContents.isDestroyed()) {
+      this.webContents.close();
+    }
     this.view = null;
     this.webContents = null;
   }

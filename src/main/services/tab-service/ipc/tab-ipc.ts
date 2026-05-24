@@ -180,9 +180,23 @@ export class TabIPC {
     });
 
     // --- Tab Operations ---
-    ipcMain.handle("tab-service:switch-to-tab", async (_event, tabId: number) => {
+    ipcMain.handle("tab-service:switch-to-tab", async (event, tabId: number) => {
       const tab = this.tabService.getTabById(tabId);
       if (!tab) return false;
+
+      const webContents = event.sender;
+      const requestingWindow = browserWindowsController.getWindowFromWebContents(webContents);
+
+      // If the tab is in a different window, move it to the requesting window first
+      if (requestingWindow && tab.getWindow().id !== requestingWindow.id) {
+        if (this.tabService.moveTabToWindowHook) {
+          await this.tabService.moveTabToWindowHook(tab, requestingWindow);
+        } else {
+          this.tabService.migrateTabBetweenLayouts(tab, requestingWindow.id);
+          tab.setWindow(requestingWindow);
+        }
+      }
+
       this.tabService.activateTab(tab);
       return true;
     });

@@ -130,7 +130,8 @@ export class TabService extends TypedEventEmitter<TabServiceEvents> {
     // Auto-sleep/archive interval (every 10s)
     setInterval(() => {
       if (quitController.isQuitting) return;
-      const now = Date.now();
+      // Use seconds — lastActiveAt is stored in seconds (from getCurrentTimestamp())
+      const nowSec = Math.floor(Date.now() / 1000);
 
       for (const tab of this.tabs.values()) {
         if (tab.owner.kind !== "normal") continue;
@@ -139,8 +140,8 @@ export class TabService extends TypedEventEmitter<TabServiceEvents> {
         // Auto-archive (destroy) tabs inactive too long
         const archiveAfter = getSettingValueById("archiveTabAfter");
         if (typeof archiveAfter === "string" && archiveAfter !== "never") {
-          const archiveMs = this.parseDurationToMs(archiveAfter);
-          if (archiveMs > 0 && now - tab.lastActiveAt >= archiveMs) {
+          const archiveSec = this.parseDurationToSeconds(archiveAfter);
+          if (archiveSec > 0 && nowSec - tab.lastActiveAt >= archiveSec) {
             tab.destroy();
             continue;
           }
@@ -151,7 +152,7 @@ export class TabService extends TypedEventEmitter<TabServiceEvents> {
           const sleepAfter = getSettingValueById("sleepTabAfter");
           if (typeof sleepAfter === "string" && sleepAfter !== "never") {
             const sleepSeconds = SleepTabValueMap[sleepAfter as keyof typeof SleepTabValueMap];
-            if (typeof sleepSeconds === "number" && now - tab.lastActiveAt >= sleepSeconds * 1000) {
+            if (typeof sleepSeconds === "number" && nowSec - tab.lastActiveAt >= sleepSeconds) {
               tab.putToSleep();
             }
           }
@@ -160,18 +161,17 @@ export class TabService extends TypedEventEmitter<TabServiceEvents> {
     }, 10_000);
   }
 
-  private parseDurationToMs(value: string): number {
-    // Matches patterns like "5m", "30m", "1h", "12h", "1d", "7d"
+  private parseDurationToSeconds(value: string): number {
     const match = value.match(/^(\d+)(m|h|d)$/);
     if (!match) return 0;
     const num = parseInt(match[1], 10);
     switch (match[2]) {
       case "m":
-        return num * 60 * 1000;
+        return num * 60;
       case "h":
-        return num * 60 * 60 * 1000;
+        return num * 60 * 60;
       case "d":
-        return num * 24 * 60 * 60 * 1000;
+        return num * 24 * 60 * 60;
       default:
         return 0;
     }
@@ -411,12 +411,40 @@ export class TabService extends TypedEventEmitter<TabServiceEvents> {
     layout.setActiveNode(tab.spaceId, node);
     layout.setFocusedTab(tab.spaceId, tab);
 
+    // Mark as recently active (prevents premature archive/sleep)
+    tab.lastActiveAt = Math.floor(Date.now() / 1000);
+
     // Update view visibility and bounds
     this.updateTabVisibility(windowId, tab.spaceId);
     this.handlePageBoundsChanged(windowId);
 
     // Notify renderer of active tab change
     this.emitStructuralChange(windowId);
+  }
+
+  /**
+   * Migrate a tab's layout node from its current window to a new window.
+   * Must be called BEFORE `tab.setWindow(newWindow)` so the old layout is still accessible.
+   */
+  public migrateTabBetweenLayouts(tab: Tab, toWindowId: number): void {
+    const fromWindowId = tab.getWindow().id;
+    if (fromWindowId === toWindowId) return;
+
+    const fromLayout = this.layouts.get(fromWindowId);
+    const toLayout = this.getOrCreateLayout(toWindowId);
+
+    // Remove from old layout
+    if (fromLayout) {
+      const node = fromLayout.getNodeForTab(tab.id);
+      if (node && node.mode === "single") {
+        fromLayout.destroyNode(node.id);
+      } else if (node) {
+        node.removeTab(tab);
+      }
+    }
+
+    // Create a new single node in the target layout
+    toLayout.createSingleNode(tab);
   }
 
   /**

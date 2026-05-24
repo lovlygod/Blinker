@@ -187,7 +187,10 @@ async function moveTabToWindowIfNeeded(tab: Tab, window: BrowserWindow, isStale?
       sendPlaceholderToRenderer(oldWindow, tab.spaceId, tab.id, screenshot);
     }
 
-    // Move the tab to the new window
+    // Migrate the layout node BEFORE calling setWindow (so old layout is still accessible)
+    tabService.migrateTabBetweenLayouts(tab, window.id);
+
+    // Move the tab to the new window (emits "window-changed" which triggers structural updates)
     prepareTabForWindowTransfer(tab);
     tab.setWindow(window);
   }

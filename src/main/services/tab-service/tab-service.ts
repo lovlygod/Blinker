@@ -857,9 +857,13 @@ export class TabService extends TypedEventEmitter<TabServiceEvents> {
     for (const tab of tabsInSpace) {
       const shouldBeVisible = activeNode !== undefined && activeNode.hasTab(tab.id);
       if (tab.visible !== shouldBeVisible) {
-        // Exit fullscreen when a tab is being hidden
-        if (!shouldBeVisible && tab.fullScreen) {
-          tab.setFullScreen(false);
+        // When a tab is being hidden, record the time so archive/sleep timers
+        // measure from when the user actually stopped viewing it.
+        if (!shouldBeVisible) {
+          tab.lastActiveAt = Math.floor(Date.now() / 1000);
+          if (tab.fullScreen) {
+            tab.setFullScreen(false);
+          }
         }
         tab.visible = shouldBeVisible;
         tab.layer?.setVisible(shouldBeVisible);
@@ -880,6 +884,7 @@ export class TabService extends TypedEventEmitter<TabServiceEvents> {
       const oldTabs = this.getTabsInWindowSpace(windowId, oldSpaceId);
       for (const tab of oldTabs) {
         if (tab.visible) {
+          tab.lastActiveAt = Math.floor(Date.now() / 1000);
           if (tab.fullScreen) {
             tab.setFullScreen(false);
           }

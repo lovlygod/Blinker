@@ -269,6 +269,9 @@ export class TabService extends TypedEventEmitter<TabServiceEvents> {
     // Update view visibility and bounds
     this.updateTabVisibility(windowId, spaceId);
     this.handlePageBoundsChanged(windowId);
+
+    // Notify renderer of active node change
+    this.emitStructuralChange(windowId);
   }
 
   /**
@@ -293,6 +296,9 @@ export class TabService extends TypedEventEmitter<TabServiceEvents> {
     // Update view visibility and bounds
     this.updateTabVisibility(windowId, tab.spaceId);
     this.handlePageBoundsChanged(windowId);
+
+    // Notify renderer of active tab change
+    this.emitStructuralChange(windowId);
   }
 
   /**

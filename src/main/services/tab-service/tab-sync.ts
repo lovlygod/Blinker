@@ -332,16 +332,9 @@ export function initTabSync(): void {
   tabService.moveTabToWindowHook = (tab, window) => moveTabOrGroupToWindow(tab, window);
 
   // Move active tab view to focused window.
-  // Debounces spurious focus events from WebContentsView manipulation.
-  // After moving the tab, programmatically re-focuses the target window
-  // to ensure it stays in front (Electron can shift focus during view moves).
-  let _lastFocusMoveTime = 0;
-  const FOCUS_MOVE_DEBOUNCE_MS = 200;
-
+  // The LayerManager defers reallocateFocus() when the window isn't focused,
+  // so we don't need debounce hacks here — background windows won't steal focus.
   windowsController.on("window-focused", (id) => {
-    const now = Date.now();
-    if (now - _lastFocusMoveTime < FOCUS_MOVE_DEBOUNCE_MS) return;
-
     const window = browserWindowsController.getWindowById(id);
     if (!window || window.destroyed || window.browserWindowType !== "normal") return;
 
@@ -361,11 +354,6 @@ export function initTabSync(): void {
       return;
     }
 
-    // Lock out other focus-triggered moves while this one is in flight.
-    // Without this, a spurious focus event during the async screenshot capture
-    // would queue a competing mutation that moves the tab back.
-    _lastFocusMoveTime = Date.now();
-
     // Async move: screenshot → move → placeholder → activate
     const targetWindowId = window.id;
     runTabSyncMutation(async () => {
@@ -378,10 +366,6 @@ export function initTabSync(): void {
       if (focusedTab.isDestroyed || window.destroyed) return;
 
       tabService.activateTab(focusedTab);
-
-      // Extend the debounce window after completion to absorb any delayed
-      // focus events from Electron's WebContentsView manipulation.
-      _lastFocusMoveTime = Date.now();
     }).catch((err) => {
       console.error("[tab-sync] Failed to move active tab on focus:", err);
     });

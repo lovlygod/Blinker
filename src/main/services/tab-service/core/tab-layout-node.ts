@@ -32,6 +32,7 @@ export class TabLayoutNode extends TypedEventEmitter<TabLayoutNodeEvents> {
 
   private _tabs: Tab[] = [];
   private _frontTab: Tab | null = null;
+  private _destroyListeners: Map<number, () => void> = new Map();
 
   constructor(id: string, mode: TabLayoutNodeMode, initialTab: Tab, windowId: number) {
     super();
@@ -96,10 +97,12 @@ export class TabLayoutNode extends TypedEventEmitter<TabLayoutNodeEvents> {
       tab.setSpace(this.spaceId);
     }
 
-    // Listen for tab destruction
+    // Listen for tab destruction (guarded + tracked for cleanup)
     const onDestroyed = () => {
-      this.removeTab(tab);
+      this._destroyListeners.delete(tab.id);
+      if (!this.isDestroyed) this.removeTab(tab);
     };
+    this._destroyListeners.set(tab.id, onDestroyed);
     tab.once("destroyed", onDestroyed);
 
     this.emit("tab-added", tab);
@@ -112,6 +115,13 @@ export class TabLayoutNode extends TypedEventEmitter<TabLayoutNodeEvents> {
 
     const index = this._tabs.findIndex((t) => t.id === tab.id);
     if (index === -1) return false;
+
+    // Remove the destroy listener to prevent stale callbacks
+    const listener = this._destroyListeners.get(tab.id);
+    if (listener) {
+      tab.off("destroyed", listener);
+      this._destroyListeners.delete(tab.id);
+    }
 
     this._tabs.splice(index, 1);
 
@@ -171,6 +181,13 @@ export class TabLayoutNode extends TypedEventEmitter<TabLayoutNodeEvents> {
   public destroy(): void {
     if (this.isDestroyed) return;
     this.isDestroyed = true;
+
+    // Clean up all destroy listeners from remaining tabs
+    for (const [tabId, listener] of this._destroyListeners) {
+      const tab = this._tabs.find((t) => t.id === tabId);
+      if (tab) tab.off("destroyed", listener);
+    }
+    this._destroyListeners.clear();
 
     this.emit("destroyed");
     this.destroyEmitter();

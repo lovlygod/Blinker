@@ -487,11 +487,13 @@ export class TabService extends TypedEventEmitter<TabServiceEvents> {
     const pinnedTab = this.pinnedTabs.get(pinnedTabId);
     if (!pinnedTab) return false;
 
-    // Make all associated tabs normal
+    // Collect affected window IDs before destroying (which clears associations)
+    const affectedWindowIds = new Set<number>();
     for (const tabId of pinnedTab.associations.values()) {
       const tab = this.tabs.get(tabId);
       if (tab) {
         tab.owner = { kind: "normal" };
+        affectedWindowIds.add(tab.getWindow().id);
       }
     }
 
@@ -501,11 +503,8 @@ export class TabService extends TypedEventEmitter<TabServiceEvents> {
     this.emit("pinned-tab-changed");
 
     // Emit structural change for all affected windows
-    for (const tabId of pinnedTab.associations.values()) {
-      const tab = this.tabs.get(tabId);
-      if (tab) {
-        this.emitStructuralChange(tab.getWindow().id);
-      }
+    for (const windowId of affectedWindowIds) {
+      this.emitStructuralChange(windowId);
     }
 
     return true;

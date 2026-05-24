@@ -13,6 +13,7 @@ import { tabService } from "@/services/tab-service";
 import { sessionsController } from "@/controllers/sessions-controller";
 import { spacesController } from "@/controllers/spaces-controller";
 import { tabPersistenceService } from "@/services/tab-service";
+import { relocateTabsFromClosingWindow } from "@/services/tab-service/tab-sync";
 import { quitController } from "@/controllers/quit-controller";
 import { hex_is_light } from "@/modules/utils";
 
@@ -407,13 +408,21 @@ export class BrowserWindow extends BaseWindow<BrowserWindowEvents> {
       // Skip during quit — the process is dying and the database is already closed,
       // so calling tab.destroy() would crash when it tries to access SQLite.
       if (!quitController.isQuitting && closingWindowTabs.length > 0) {
-        setTimeout(() => {
-          for (const tab of closingWindowTabs) {
-            tab.destroy();
-          }
-        }, 500);
+        // Try to relocate tabs to surviving windows (when sync is enabled)
+        const unrelocatable = relocateTabsFromClosingWindow(this, closingWindowTabs);
+
+        // Destroy tabs that couldn't be relocated (or all if sync is disabled)
+        const tabsToDestroy = unrelocatable ?? closingWindowTabs;
+        if (tabsToDestroy.length > 0) {
+          setTimeout(() => {
+            for (const tab of tabsToDestroy) {
+              tab.destroy();
+            }
+          }, 500);
+        }
       }
 
+      tabService.removeLayout(this.id);
       this.omnibox.destroy();
       this.layerManager.destroy();
     }

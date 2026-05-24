@@ -12,6 +12,7 @@ import {
   recordBrowsingHistoryVisit,
   updateBrowsingHistoryTitleForOpenPage
 } from "@/saving/history/browsing-history";
+import { createWebContextMenu } from "./web-context-menu";
 
 export const SLEEP_MODE_URL = "about:blank?sleep=true";
 
@@ -38,6 +39,7 @@ export type TabEvents = {
   "space-changed": [];
   "window-changed": [oldWindowId: number];
   "fullscreen-changed": [boolean];
+  "target-url-changed": [url: string];
   "new-tab-requested": [
     string,
     "new-window" | "foreground-tab" | "background-tab" | "default" | "other",
@@ -297,6 +299,9 @@ export class Tab extends TypedEventEmitter<TabEvents> {
 
     this.setupWebContentsListeners();
 
+    // Setup web page context menu (right-click on page content)
+    createWebContextMenu(this, this.window);
+
     // Register with extensions
     const extensions = this.loadedProfile.extensions;
     extensions.addTab(this.webContents, this.window?.browserWindow);
@@ -507,6 +512,20 @@ export class Tab extends TypedEventEmitter<TabEvents> {
     });
   }
 
+  public loadErrorPage(errorCode: number, url: string): void {
+    const parsedURL = URL.parse(url);
+    if (parsedURL && parsedURL.protocol === "flow:" && parsedURL.hostname === "error") {
+      return; // Prevent infinite error page loop
+    }
+
+    const errorPageURL = new URL("flow://error");
+    errorPageURL.searchParams.set("errorCode", errorCode.toString());
+    errorPageURL.searchParams.set("url", url);
+    errorPageURL.searchParams.set("initial", "1");
+
+    this.loadURL(errorPageURL.toString());
+  }
+
   public restoreNavigationHistory(entries: NavigationEntry[], activeIndex: number): void {
     if (!this.webContents || this.webContents.isDestroyed()) return;
 
@@ -611,6 +630,22 @@ export class Tab extends TypedEventEmitter<TabEvents> {
       }
     });
     wc.on("audio-state-changed", () => this.updateTabState());
+
+    wc.on("did-fail-load", (event, errorCode, _errorDescription, validatedURL, isMainFrame) => {
+      event.preventDefault();
+      // Skip aborted operations (user navigation cancellations)
+      if (isMainFrame && errorCode !== -3) {
+        this.loadErrorPage(errorCode, validatedURL);
+      }
+    });
+
+    wc.on("devtools-open-url", (_event, url) => {
+      this.emit("new-tab-requested", url, "foreground-tab", undefined, undefined, { noLoadURL: false });
+    });
+
+    wc.on("update-target-url", (_event, url) => {
+      this.emit("target-url-changed", url);
+    });
 
     wc.on("focus", () => this.emit("focused"));
 

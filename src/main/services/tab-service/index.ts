@@ -27,6 +27,7 @@
 import { TabService } from "./tab-service";
 import { TabPersistenceService } from "./persistence/tab-persistence-service";
 import { TabIPC } from "./ipc/tab-ipc";
+import { initTabSync } from "./tab-sync";
 
 // Export classes
 export { TabService } from "./tab-service";
@@ -51,4 +52,5 @@ export function initializeTabService(): void {
   tabService.loadPinnedTabs();
   tabPersistenceService.start();
   tabIPC.initialize();
+  initTabSync();
 }

@@ -1,0 +1,358 @@
+/**
+ * Web page right-click context menu.
+ *
+ * Uses the `electron-context-menu` package to build a rich context menu
+ * for web content: back/forward/reload, open link in new tab, copy/paste,
+ * search selection, save image, inspect element, extension items, etc.
+ */
+
+import { browserWindowsController } from "@/controllers/windows-controller/interfaces/browser";
+import { BrowserWindow } from "@/controllers/windows-controller/types";
+import contextMenu from "electron-context-menu";
+import { Tab } from "./tab";
+import { saveImageAs } from "./save-image-as";
+import { tabService } from "../index";
+
+interface NavigationHistory {
+  canGoBack: () => boolean;
+  canGoForward: () => boolean;
+  goBack: () => void;
+  goForward: () => void;
+}
+
+type MenuItemFunction = (options: Record<string, unknown>) => Electron.MenuItemConstructorOptions;
+type InspectFunction = () => Electron.MenuItemConstructorOptions;
+
+interface MenuActions {
+  lookUpSelection: MenuItemFunction;
+  copyLink: MenuItemFunction;
+  cut: MenuItemFunction;
+  copy: MenuItemFunction;
+  paste: MenuItemFunction;
+  selectAll: MenuItemFunction;
+  inspect: InspectFunction;
+  copyImage: MenuItemFunction;
+  copyImageAddress: MenuItemFunction;
+  separator: InspectFunction;
+  [key: string]: MenuItemFunction | InspectFunction;
+}
+
+export function createWebContextMenu(tab: Tab, window: BrowserWindow) {
+  const webContents = tab.webContents;
+  if (!webContents) return;
+
+  contextMenu({
+    window: webContents,
+    menu(defaultActions, parameters, _browserWindow, dictionarySuggestions): Electron.MenuItemConstructorOptions[] {
+      const navigationHistory = webContents.navigationHistory as NavigationHistory;
+      const canGoBack = navigationHistory.canGoBack();
+      const canGoForward = navigationHistory.canGoForward();
+      const lookUpSelection = defaultActions.lookUpSelection({});
+      const searchEngine = "Google";
+
+      const createNewTab = async (url: string, overrideWindow?: BrowserWindow) => {
+        const targetWindow = overrideWindow ?? window;
+        const spaceId = targetWindow.currentSpaceId;
+        if (!spaceId) return;
+        const newTab = await tabService.createTab(targetWindow.id, tab.profileId, spaceId, undefined, { url });
+        tabService.activateTab(newTab);
+      };
+
+      const openLinkItems = createOpenLinkItems(parameters, createNewTab);
+      const navigationItems = createNavigationItems(navigationHistory, webContents, canGoBack, canGoForward);
+      const extensionItems = createExtensionItems(tab, webContents, parameters);
+      const textHistoryItems = createTextHistoryItems(webContents);
+      const textEditItems = createTextEditItems(defaultActions as MenuActions, webContents);
+      const selectionItems = createSelectionItems(
+        defaultActions as MenuActions,
+        parameters,
+        createNewTab,
+        searchEngine
+      );
+      const imageItems = createImageItems(parameters, webContents, window, createNewTab, defaultActions as MenuActions);
+
+      const sections: Electron.MenuItemConstructorOptions[][] = [];
+      const hasDictionarySuggestions = dictionarySuggestions.some((suggestion) => suggestion.visible);
+      if (hasDictionarySuggestions) {
+        sections.push(dictionarySuggestions);
+      }
+
+      const hasLink = !!parameters.linkURL;
+      const hasLookUpSelection = lookUpSelection.visible;
+
+      let noSpecialActions = true;
+      if (hasLookUpSelection && parameters.selectionText.trim()) {
+        sections.push([lookUpSelection]);
+        noSpecialActions = false;
+      }
+      if (hasLink) {
+        sections.push(openLinkItems);
+        const linkItems = createLinkItems(parameters, webContents, defaultActions, true);
+        sections.push(linkItems);
+        noSpecialActions = false;
+      }
+      if (parameters.hasImageContents) {
+        sections.push(imageItems);
+        noSpecialActions = false;
+      }
+
+      if (noSpecialActions) {
+        sections.push(navigationItems);
+        const linkItems = createLinkItems(parameters, webContents, defaultActions, false);
+        sections.push(linkItems);
+      }
+
+      if (parameters.selectionText.trim() && !parameters.isEditable) {
+        sections.push(selectionItems);
+      }
+
+      if (parameters.isEditable) {
+        sections.push(textHistoryItems);
+        sections.push(textEditItems);
+      }
+
+      sections.push(extensionItems);
+
+      const devItems = createDevItems(parameters, defaultActions, createNewTab, noSpecialActions);
+      sections.push(devItems);
+
+      return combineSections(sections, defaultActions as MenuActions);
+    }
+  });
+}
+
+function createOpenLinkItems(
+  parameters: Electron.ContextMenuParams,
+  createNewTab: (url: string, window?: BrowserWindow) => Promise<void>
+): Electron.MenuItemConstructorOptions[] {
+  return [
+    {
+      label: "Open Link in New Tab",
+      click: () => {
+        createNewTab(parameters.linkURL);
+      }
+    },
+    {
+      label: "Open Link in New Window",
+      click: async () => {
+        const newWindow = await browserWindowsController.create();
+        createNewTab(parameters.linkURL, newWindow);
+      }
+    }
+  ];
+}
+
+function createLinkItems(
+  parameters: Electron.ContextMenuParams,
+  webContents: Electron.WebContents,
+  defaultActions: MenuActions,
+  hasLink: boolean
+): Electron.MenuItemConstructorOptions[] {
+  const items: Electron.MenuItemConstructorOptions[] = [];
+
+  if (hasLink) {
+    const linkURL = parameters.linkURL;
+
+    items.push({
+      label: "Save Link As...",
+      click: () => {
+        webContents.downloadURL(linkURL);
+      }
+    });
+
+    const copyLinkItem = defaultActions.copyLink({});
+    copyLinkItem.label = "Copy Link Address";
+    copyLinkItem.visible = true;
+    items.push(copyLinkItem);
+  }
+
+  return items;
+}
+
+function createNavigationItems(
+  navigationHistory: NavigationHistory,
+  webContents: Electron.WebContents,
+  canGoBack: boolean,
+  canGoForward: boolean
+): Electron.MenuItemConstructorOptions[] {
+  return [
+    {
+      label: "Back",
+      click: () => {
+        navigationHistory.goBack();
+      },
+      enabled: canGoBack
+    },
+    {
+      label: "Forward",
+      click: () => {
+        navigationHistory.goForward();
+      },
+      enabled: canGoForward
+    },
+    {
+      label: "Reload",
+      click: () => {
+        webContents.reload();
+      },
+      enabled: true
+    }
+  ];
+}
+
+function createExtensionItems(
+  tab: Tab,
+  webContents: Electron.WebContents,
+  parameters: Electron.ContextMenuParams
+): Electron.MenuItemConstructorOptions[] {
+  const extensions = tab.loadedProfile.extensions;
+  // @ts-expect-error: ts error, but still works
+  const items: Electron.MenuItemConstructorOptions[] = extensions.getContextMenuItems(webContents, parameters);
+  return items;
+}
+
+function createTextHistoryItems(webContents: Electron.WebContents): Electron.MenuItemConstructorOptions[] {
+  return [
+    {
+      label: "Undo",
+      click: () => {
+        webContents.undo();
+      },
+      enabled: true
+    },
+    {
+      label: "Redo",
+      click: () => {
+        webContents.redo();
+      },
+      enabled: true
+    }
+  ];
+}
+
+function createTextEditItems(
+  defaultActions: MenuActions,
+  webContents: Electron.WebContents
+): Electron.MenuItemConstructorOptions[] {
+  return [
+    defaultActions.cut({}),
+    defaultActions.copy({}),
+    defaultActions.paste({}),
+    {
+      label: "Paste and Match Style",
+      click: () => {
+        webContents.pasteAndMatchStyle();
+      },
+      enabled: true
+    },
+    defaultActions.selectAll({})
+  ];
+}
+
+function createSelectionItems(
+  defaultActions: MenuActions,
+  parameters: Electron.ContextMenuParams,
+  createNewTab: (url: string) => Promise<void>,
+  searchEngine: string
+): Electron.MenuItemConstructorOptions[] {
+  const selectionText = parameters.selectionText;
+
+  let displaySelectionText = selectionText;
+  if (displaySelectionText.length > 45) {
+    displaySelectionText = selectionText.slice(0, 45).trim() + "...";
+  }
+
+  return [
+    defaultActions.copy({}),
+    {
+      label: `Search ${searchEngine} for "${displaySelectionText}"`,
+      click: () => {
+        const searchURL = new URL("https://www.google.com/search");
+        searchURL.searchParams.set("q", selectionText);
+        createNewTab(searchURL.toString());
+      }
+    }
+  ];
+}
+
+function createDevItems(
+  parameters: Electron.ContextMenuParams,
+  defaultActions: MenuActions,
+  createNewTab: (url: string) => Promise<void>,
+  noSpecialActions: boolean
+): Electron.MenuItemConstructorOptions[] {
+  const currentFrame = parameters.frame;
+  const topFrame = currentFrame?.top || currentFrame;
+  const isTopFrame = currentFrame === topFrame;
+
+  const topFrameUrl = topFrame?.url;
+  const currentFrameUrl = currentFrame?.url;
+
+  const devItems: Electron.MenuItemConstructorOptions[] = [];
+
+  if (topFrameUrl) {
+    devItems.push({
+      label: "View Page Source",
+      click: () => {
+        createNewTab(`view-source:${topFrameUrl}`);
+      },
+      visible: noSpecialActions
+    });
+  }
+
+  if (!isTopFrame && currentFrameUrl) {
+    devItems.push({
+      label: "View Frame Source",
+      click: () => {
+        createNewTab(`view-source:${currentFrameUrl}`);
+      },
+      visible: noSpecialActions
+    });
+  }
+
+  devItems.push(defaultActions.inspect());
+  return devItems;
+}
+
+function createImageItems(
+  parameters: Electron.ContextMenuParams,
+  webContents: Electron.WebContents,
+  window: BrowserWindow,
+  createNewTab: (url: string) => Promise<void>,
+  defaultActions: MenuActions
+): Electron.MenuItemConstructorOptions[] {
+  return [
+    {
+      label: "Open Image in New Tab",
+      click: () => {
+        createNewTab(parameters.srcURL);
+      }
+    },
+    {
+      label: "Save Image As...",
+      click: () => {
+        void saveImageAs(parameters, webContents, window);
+      }
+    },
+    defaultActions.copyImage({}),
+    defaultActions.copyImageAddress({})
+  ];
+}
+
+function combineSections(
+  sections: Electron.MenuItemConstructorOptions[][],
+  defaultActions: MenuActions
+): Electron.MenuItemConstructorOptions[] {
+  const combinedSections: Electron.MenuItemConstructorOptions[] = [];
+
+  sections.forEach((section, index) => {
+    if (section.length > 0) {
+      combinedSections.push(...section);
+      if (index < sections.length - 1) {
+        combinedSections.push(defaultActions.separator());
+      }
+    }
+  });
+
+  return combinedSections;
+}

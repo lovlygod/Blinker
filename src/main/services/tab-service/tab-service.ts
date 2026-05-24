@@ -63,6 +63,12 @@ export class TabService extends TypedEventEmitter<TabServiceEvents> {
   // Shared positioner
   public readonly positioner: TabPositioner = new TabPositioner();
 
+  /**
+   * Hook for tab-sync: moves a tab to another window with placeholder handling.
+   * Set by initTabSync() to avoid circular dependency.
+   */
+  public moveTabToWindowHook: ((tab: Tab, window: BrowserWindow) => Promise<void>) | null = null;
+
   // --- Pinned Tab Persistence ---
 
   /**
@@ -510,9 +516,13 @@ export class TabService extends TypedEventEmitter<TabServiceEvents> {
     if (associatedTabId !== null) {
       const tab = this.tabs.get(associatedTabId);
       if (tab && !tab.isDestroyed) {
-        // Move to window if needed
+        // Move to window if needed (with placeholder handling)
         if (tab.getWindow().id !== window.id) {
-          tab.setWindow(window);
+          if (this.moveTabToWindowHook) {
+            await this.moveTabToWindowHook(tab, window);
+          } else {
+            tab.setWindow(window);
+          }
         }
         this.activateTab(tab);
         return true;
@@ -550,7 +560,11 @@ export class TabService extends TypedEventEmitter<TabServiceEvents> {
           tab.loadURL(pinnedTab.defaultUrl);
         }
         if (tab.getWindow().id !== window.id) {
-          tab.setWindow(window);
+          if (this.moveTabToWindowHook) {
+            await this.moveTabToWindowHook(tab, window);
+          } else {
+            tab.setWindow(window);
+          }
         }
         this.activateTab(tab);
         return true;
@@ -858,6 +872,17 @@ export class TabService extends TypedEventEmitter<TabServiceEvents> {
       if (currentLayout && this.isTabActive(tab)) {
         currentLayout.setFocusedTab(tab.spaceId, tab);
       }
+    });
+
+    tab.on("target-url-changed", (url) => {
+      if (quitController.isQuitting) return;
+      const window = tab.getWindow();
+      if (window.destroyed) return;
+      window.sendMessageToCoreWebContents("tab-service:on-target-url", {
+        tabId: tab.id,
+        windowId: window.id,
+        url
+      });
     });
 
     tab.on("new-tab-requested", (url, disposition, constructorOptions, handlerDetails, options) => {

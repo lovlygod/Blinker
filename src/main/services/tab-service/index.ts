@@ -48,6 +48,7 @@ export const tabIPC = new TabIPC(tabService);
  * Should be called during app startup after the database is ready.
  */
 export function initializeTabService(): void {
+  tabService.loadPinnedTabs();
   tabPersistenceService.start();
   tabIPC.initialize();
 }

@@ -19,6 +19,8 @@ import { BrowserWindow } from "@/controllers/windows-controller/types";
 import { clipboard, Menu, MenuItem, WebContents } from "electron";
 import { quitController } from "@/controllers/quit-controller";
 import { setWindowSpace } from "@/ipc/session/spaces";
+import { getDb, schema } from "@/saving/db";
+import { eq } from "drizzle-orm";
 
 export const NEW_TAB_URL = "flow://new-tab";
 
@@ -60,6 +62,48 @@ export class TabService extends TypedEventEmitter<TabServiceEvents> {
 
   // Shared positioner
   public readonly positioner: TabPositioner = new TabPositioner();
+
+  // --- Pinned Tab Persistence ---
+
+  /**
+   * Load all pinned tabs from the database into memory.
+   * Called once during app startup.
+   */
+  public loadPinnedTabs(): void {
+    const db = getDb();
+    const rows = db.select().from(schema.pinnedTabs).all();
+    for (const row of rows) {
+      const pinnedTab = new PinnedTab(row);
+      this.pinnedTabs.set(pinnedTab.uniqueId, pinnedTab);
+      this.wirePinnedTabEvents(pinnedTab);
+    }
+  }
+
+  private savePinnedTab(pinnedTab: PinnedTab): void {
+    const db = getDb();
+    db.insert(schema.pinnedTabs)
+      .values({
+        uniqueId: pinnedTab.uniqueId,
+        profileId: pinnedTab.profileId,
+        defaultUrl: pinnedTab.defaultUrl,
+        faviconUrl: pinnedTab.faviconUrl,
+        position: pinnedTab.position
+      })
+      .onConflictDoUpdate({
+        target: schema.pinnedTabs.uniqueId,
+        set: {
+          defaultUrl: pinnedTab.defaultUrl,
+          faviconUrl: pinnedTab.faviconUrl,
+          position: pinnedTab.position
+        }
+      })
+      .run();
+  }
+
+  private deletePinnedTabFromDb(uniqueId: string): void {
+    const db = getDb();
+    db.delete(schema.pinnedTabs).where(eq(schema.pinnedTabs.uniqueId, uniqueId)).run();
+  }
 
   // --- Tab Creation ---
 
@@ -419,6 +463,7 @@ export class TabService extends TypedEventEmitter<TabServiceEvents> {
 
     this.wirePinnedTabEvents(pinnedTab);
     this.normalizePinnedTabPositions(tab.profileId);
+    this.savePinnedTab(pinnedTab);
     this.emit("pinned-tab-changed");
     this.emitStructuralChange(tab.getWindow().id);
 
@@ -443,6 +488,7 @@ export class TabService extends TypedEventEmitter<TabServiceEvents> {
     }
 
     this.pinnedTabs.delete(pinnedTabId);
+    this.deletePinnedTabFromDb(pinnedTabId);
     pinnedTab.destroy();
 
     this.emit("pinned-tab-changed");
@@ -533,6 +579,7 @@ export class TabService extends TypedEventEmitter<TabServiceEvents> {
     }
 
     this.pinnedTabs.delete(pinnedTabId);
+    this.deletePinnedTabFromDb(pinnedTabId);
     pinnedTab.destroy();
 
     this.emit("pinned-tab-changed");
@@ -925,6 +972,10 @@ export class TabService extends TypedEventEmitter<TabServiceEvents> {
     pinnedTab.on("association-changed", () => {
       this.emit("pinned-tab-changed");
     });
+    pinnedTab.on("updated", () => {
+      this.savePinnedTab(pinnedTab);
+      this.emit("pinned-tab-changed");
+    });
   }
 
   private getMaxPinnedTabPosition(profileId: string): number {
@@ -1027,12 +1078,30 @@ export class TabService extends TypedEventEmitter<TabServiceEvents> {
 
     const contextMenu = new Menu();
 
+    const isPinned = tab.owner.kind === "pinned";
+
     contextMenu.append(
       new MenuItem({
         label: "Copy URL",
         enabled: hasURL,
         click: () => {
           if (tab.url) clipboard.writeText(tab.url);
+        }
+      })
+    );
+
+    contextMenu.append(new MenuItem({ type: "separator" }));
+
+    contextMenu.append(
+      new MenuItem({
+        label: isPinned ? "Unpin Tab" : "Pin Tab",
+        enabled: hasURL,
+        click: () => {
+          if (tab.owner.kind === "pinned") {
+            this.unpinToTabList(tab.owner.pinnedTabId);
+          } else {
+            this.createPinnedTabFromTab(tabId);
+          }
         }
       })
     );

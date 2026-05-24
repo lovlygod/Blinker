@@ -418,9 +418,13 @@ export class TabService extends TypedEventEmitter<TabServiceEvents> {
     this.updateTabVisibility(windowId, tab.spaceId);
     this.handlePageBoundsChanged(windowId);
 
-    // Focus the tab's layer through the LayerManager so the window
-    // properly owns input focus for this tab's webContents.
-    if (tab.layer) {
+    // Focus the tab's layer through the LayerManager — but only if the
+    // window is currently focused. Calling webContents.focus() on a
+    // background window would steal OS focus (same issue reallocateFocus
+    // defers to avoid). When the window later gains focus, the deferred
+    // reallocateFocus handles it.
+    const window = browserWindowsController.getWindowById(windowId);
+    if (tab.layer && window && !window.destroyed && window.browserWindow.isFocused()) {
       tab.layer.focus();
     }
 

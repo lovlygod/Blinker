@@ -144,7 +144,7 @@ function BrowserContent() {
   return (
     <div
       className={cn(
-        "rounded-sm overflow-hidden",
+        "rounded-md overflow-hidden",
         "flex-1 relative remove-app-drag",
         "bg-white/15",
         // Better shadow for the browser content

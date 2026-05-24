@@ -176,11 +176,14 @@ async function moveTabToWindowIfNeeded(tab: Tab, window: BrowserWindow, isStale?
     const oldWindow = tab.getWindow();
     if (oldWindow.destroyed) return;
 
-    // Capture before the move
+    // Capture screenshot BEFORE the move so the old window gets a placeholder.
+    // Use a short timeout to avoid blocking on unresponsive renderers.
     const screenshot = await captureTabScreenshot(tab);
 
+    // After async capture, re-check validity
     if (isStale?.()) return;
     if (tab.isDestroyed || window.destroyed || oldWindow.destroyed) return;
+    if (tab.getWindow().id === window.id) return; // already moved by another path
 
     // Send placeholder to old window before moving
     if (screenshot) {
@@ -194,6 +197,25 @@ async function moveTabToWindowIfNeeded(tab: Tab, window: BrowserWindow, isStale?
     prepareTabForWindowTransfer(tab);
     tab.setWindow(window);
   }
+}
+
+/**
+ * Move a tab to a window immediately without waiting for screenshot capture.
+ * Used by the focus handler to avoid async races caused by Electron focus events
+ * firing during captureTabScreenshot(). The old window simply clears its content
+ * (no placeholder image) — this avoids the async gap that causes focus races.
+ */
+function moveTabToWindowImmediate(tab: Tab, targetWindow: BrowserWindow): void {
+  if (tab.isDestroyed || targetWindow.destroyed) return;
+  if (tab.getWindow().id === targetWindow.id) return;
+
+  const oldWindow = tab.getWindow();
+  if (oldWindow.destroyed) return;
+
+  // Migrate layout node and move immediately (no async)
+  tabService.migrateTabBetweenLayouts(tab, targetWindow.id);
+  prepareTabForWindowTransfer(tab);
+  tab.setWindow(targetWindow);
 }
 
 async function moveActiveTabToWindow(window: BrowserWindow, isStale?: () => boolean): Promise<void> {
@@ -399,42 +421,35 @@ async function relocateDisplacedTabs(): Promise<void> {
 
 // --- Initialization ---
 
-let _focusMoveGeneration = 0;
-
 export function initTabSync(): void {
   // Set the move-tab hook so TabService can call tab-sync's move logic
   tabService.moveTabToWindowHook = (tab, window) => moveTabOrGroupToWindow(tab, window);
 
-  // Move active tab view to focused window
+  // Move active tab view to focused window (immediate, no async screenshot)
   windowsController.on("window-focused", (id) => {
     const window = browserWindowsController.getWindowById(id);
-    if (!window || window.browserWindowType !== "normal") return;
+    if (!window || window.destroyed || window.browserWindowType !== "normal") return;
 
-    const generation = ++_focusMoveGeneration;
-    const isStale = () => generation !== _focusMoveGeneration;
+    const spaceId = window.currentSpaceId;
+    if (!spaceId) return;
 
-    runTabSyncMutation(async () => {
-      if (window.destroyed || isStale()) return;
-      const spaceId = window.currentSpaceId;
-      if (!spaceId) return;
-      if (isStale()) return;
+    if (!shouldSyncSharedActiveTab(window, spaceId)) return;
 
-      if (!shouldSyncSharedActiveTab(window, spaceId)) return;
+    const focusedTab = tabService.getFocusedTab(window.id, spaceId);
+    if (!focusedTab || focusedTab.isDestroyed) return;
+    if (isSyncExcludedTab(focusedTab)) return;
 
-      await moveActiveTabToWindow(window, isStale);
-      if (isStale()) return;
+    // If the tab is already in this window, just clear placeholder and activate
+    if (focusedTab.getWindow().id === window.id) {
+      clearPlaceholderInRenderer(window.id);
+      tabService.activateTab(focusedTab);
+      return;
+    }
 
-      const currentSpaceId = window.currentSpaceId;
-      if (!currentSpaceId) return;
-
-      // Re-show the tab in its new window
-      const focusedTab = tabService.getFocusedTab(window.id, currentSpaceId);
-      if (focusedTab) {
-        tabService.activateTab(focusedTab);
-      }
-    }).catch((err) => {
-      console.error("[tab-sync] Failed to move active tab on focus:", err);
-    });
+    // Move immediately (synchronous) to avoid focus races from async screenshot capture
+    clearPlaceholderInRenderer(window.id);
+    moveTabToWindowImmediate(focusedTab, window);
+    tabService.activateTab(focusedTab);
   });
 
   // Relocate displaced tabs when active tab or space changes

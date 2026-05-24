@@ -441,12 +441,9 @@ export class TabService extends TypedEventEmitter<TabServiceEvents> {
       } else if (node) {
         node.removeTab(tab);
       }
-
-      // Clear focused tab reference if it points to the migrated tab
-      const focusedTab = fromLayout.getFocusedTab(tab.spaceId);
-      if (focusedTab?.id === tab.id) {
-        fromLayout.removeFocusedTab(tab.spaceId);
-      }
+      // Note: we intentionally keep the focusedTabMap entry in the old layout.
+      // It serves as the window's "memory" of what tab it was viewing, so the
+      // focus handler can pull it back when that window regains focus.
     }
 
     // Create a new single node in the target layout

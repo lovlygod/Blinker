@@ -129,6 +129,12 @@ function reconcilePlaceholderForWindow(windowId: number): void {
     return;
   }
 
+  // If the focused tab moved to a different space, the placeholder is stale
+  if (focusedTab.spaceId !== spaceId) {
+    clearPlaceholderInRenderer(windowId);
+    return;
+  }
+
   // If the active tab is physically in this window, clear the placeholder
   if (focusedTab.getWindow().id === windowId) {
     clearPlaceholderInRenderer(windowId);
@@ -388,10 +394,14 @@ export function initTabSync(): void {
   // When a window switches away from a synced tab, release it to another
   // window that still wants it (has it as its focused tab in the same space).
   tabService.on("active-changed", (windowId, spaceId) => {
-    reconcilePlaceholderForWindow(windowId);
+    // Reconcile placeholders for ALL windows (a tab may have moved between
+    // spaces, making placeholders in other windows stale).
+    const allWindows = browserWindowsController.getWindows().filter((w) => w.browserWindowType === "normal");
+    for (const win of allWindows) {
+      if (!win.destroyed) reconcilePlaceholderForWindow(win.id);
+    }
 
     // Find tabs in this window+space that are no longer active but are wanted elsewhere
-    const allWindows = browserWindowsController.getWindows().filter((w) => w.browserWindowType === "normal");
     for (const otherWin of allWindows) {
       if (otherWin.id === windowId || otherWin.destroyed) continue;
       if (otherWin.currentSpaceId !== spaceId) continue;

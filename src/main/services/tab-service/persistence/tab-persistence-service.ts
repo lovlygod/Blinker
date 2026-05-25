@@ -120,59 +120,73 @@ export class TabPersistenceService {
       return;
     }
 
-    const dirtyEntries = [...this.dirtyTabs.entries()];
-    const removedIds = [...this.removedTabs];
-    const windowStates = [...this.dirtyWindowStates.entries()];
+    // Snapshot and clear atomically before the transaction.
+    // Any mutations that arrive during the synchronous transaction go into
+    // fresh maps and are preserved for the next flush cycle.
+    const dirtySnapshot = new Map(this.dirtyTabs);
+    this.dirtyTabs.clear();
+    const removedSnapshot = new Set(this.removedTabs);
+    this.removedTabs.clear();
+    const windowSnapshot = new Map(this.dirtyWindowStates);
+    this.dirtyWindowStates.clear();
 
-    const db = getDb();
-    db.transaction((tx) => {
-      // Upsert dirty tabs
-      for (const [, data] of dirtyEntries) {
-        const insert = this.persistedDataToInsert(data);
-        tx.insert(schema.tabs)
-          .values(insert)
-          .onConflictDoUpdate({
-            target: schema.tabs.uniqueId,
-            set: insert
-          })
-          .run();
+    try {
+      const db = getDb();
+      db.transaction((tx) => {
+        // Upsert dirty tabs
+        for (const [, data] of dirtySnapshot) {
+          const insert = this.persistedDataToInsert(data);
+          tx.insert(schema.tabs)
+            .values(insert)
+            .onConflictDoUpdate({
+              target: schema.tabs.uniqueId,
+              set: insert
+            })
+            .run();
+        }
+
+        // Remove deleted tabs
+        for (const uniqueId of removedSnapshot) {
+          tx.delete(schema.tabs).where(eq(schema.tabs.uniqueId, uniqueId)).run();
+        }
+
+        // Upsert window states
+        for (const [windowGroupId, state] of windowSnapshot) {
+          const insert = {
+            windowGroupId,
+            width: state.width,
+            height: state.height,
+            x: state.x ?? null,
+            y: state.y ?? null,
+            isPopup: state.isPopup ?? null
+          };
+          tx.insert(schema.windowStates)
+            .values(insert)
+            .onConflictDoUpdate({
+              target: schema.windowStates.windowGroupId,
+              set: insert
+            })
+            .run();
+        }
+      });
+    } catch (err) {
+      // Re-queue entries that haven't been superseded by newer mutations
+      for (const [uniqueId, data] of dirtySnapshot) {
+        if (!this.dirtyTabs.has(uniqueId)) {
+          this.dirtyTabs.set(uniqueId, data);
+        }
       }
-
-      // Remove deleted tabs
-      for (const uniqueId of removedIds) {
-        tx.delete(schema.tabs).where(eq(schema.tabs.uniqueId, uniqueId)).run();
+      for (const uniqueId of removedSnapshot) {
+        if (!this.removedTabs.has(uniqueId) && !this.dirtyTabs.has(uniqueId)) {
+          this.removedTabs.add(uniqueId);
+        }
       }
-
-      // Upsert window states
-      for (const [windowGroupId, state] of windowStates) {
-        const insert = {
-          windowGroupId,
-          width: state.width,
-          height: state.height,
-          x: state.x ?? null,
-          y: state.y ?? null,
-          isPopup: state.isPopup ?? null
-        };
-        tx.insert(schema.windowStates)
-          .values(insert)
-          .onConflictDoUpdate({
-            target: schema.windowStates.windowGroupId,
-            set: insert
-          })
-          .run();
+      for (const [windowGroupId, state] of windowSnapshot) {
+        if (!this.dirtyWindowStates.has(windowGroupId)) {
+          this.dirtyWindowStates.set(windowGroupId, state);
+        }
       }
-    });
-
-    // Clear dirty state only after successful transaction.
-    // This ensures no data loss if the transaction throws.
-    for (const [uniqueId] of dirtyEntries) {
-      this.dirtyTabs.delete(uniqueId);
-    }
-    for (const uniqueId of removedIds) {
-      this.removedTabs.delete(uniqueId);
-    }
-    for (const [windowGroupId] of windowStates) {
-      this.dirtyWindowStates.delete(windowGroupId);
+      throw err;
     }
   }
 

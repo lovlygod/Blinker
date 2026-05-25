@@ -22,6 +22,7 @@ import { BrowserWindow } from "@/controllers/windows-controller/types";
 import { WebContents } from "electron";
 import { quitController } from "@/controllers/quit-controller";
 import { setWindowSpace } from "@/ipc/session/spaces";
+import { FLAGS } from "@/modules/flags";
 
 export const NEW_TAB_URL = "flow://new-tab";
 
@@ -999,9 +1000,9 @@ export class TabService extends TypedEventEmitter<TabServiceEvents> {
 
     const layout = this.layouts.get(windowId);
 
-    // If no active node is set yet (e.g. tabs were restored asleep), activate
-    // the focused tab or the most recently active one.
-    if (layout && !layout.getActiveNode(spaceId)) {
+    // If no active node is set yet (e.g. tabs were restored asleep), optionally
+    // activate the focused tab or the most recently active one.
+    if (FLAGS.ACTIVATE_TAB_ON_SPACE_SWITCH && layout && !layout.getActiveNode(spaceId)) {
       const focused = layout.getFocusedTab(spaceId);
       if (focused && !focused.isDestroyed) {
         this.activateTab(focused);
@@ -1263,7 +1264,7 @@ export class TabService extends TypedEventEmitter<TabServiceEvents> {
     sourceTab: Tab,
     url: string,
     disposition: "new-window" | "foreground-tab" | "background-tab" | "default" | "other",
-    _constructorOptions: Electron.WebContentsViewConstructorOptions | undefined,
+    constructorOptions: Electron.WebContentsViewConstructorOptions | undefined,
     handlerDetails: Electron.HandlerDetails | undefined,
     options: { noLoadURL?: boolean }
   ): void {
@@ -1295,6 +1296,7 @@ export class TabService extends TypedEventEmitter<TabServiceEvents> {
     const newTab = this.createTabInternal(windowId, sourceTab.profileId, sourceTab.spaceId, undefined, {
       url,
       noLoadURL: options.noLoadURL,
+      webContentsViewOptions: constructorOptions,
       position: insertPosition,
       makeActive: !isBackground
     });

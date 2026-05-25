@@ -786,12 +786,22 @@ export class Tab extends TypedEventEmitter<TabEvents> {
       const url = details.url;
 
       if (disposition === "new-window" || disposition === "foreground-tab" || disposition === "background-tab") {
-        this.emit("new-tab-requested", url, disposition, undefined, details, {});
-        return { action: "deny" };
+        return {
+          action: "allow",
+          outlivesOpener: true,
+          createWindow: (constructorOptions) => {
+            const viewOptions = constructorOptions as Electron.WebContentsViewConstructorOptions;
+            const needsManualLoad = !viewOptions.webContents;
+            this.emit("new-tab-requested", url, disposition, viewOptions, details, {
+              noLoadURL: !needsManualLoad
+            });
+            return this._lastCreatedWebContents!;
+          }
+        };
       }
 
       this.emit("new-tab-requested", url, "default", undefined, details, {});
-      return { action: "deny" };
+      return { action: "allow" };
     });
 
     // Fullscreen

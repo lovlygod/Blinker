@@ -5,16 +5,15 @@ import { loadedProfilesController } from "@/controllers/loaded-profiles-controll
 import { app } from "electron";
 import type { BrowserWindowCreationOptions, BrowserWindowType } from "@/controllers/windows-controller/types/browser";
 import type { PersistedTabData, PersistedTabLayoutNodeData } from "~/types/tab-service";
-
-const ARCHIVE_THRESHOLD_DAYS = 14;
+import { ArchiveTabValueMap } from "@/modules/basic-settings";
 
 function shouldArchiveTab(lastActiveAt: number): boolean {
-  const archiveDays = Number(getSettingValueById("autoArchiveDays")) || undefined;
-  const days = archiveDays ?? ARCHIVE_THRESHOLD_DAYS;
-  if (days <= 0) return false;
-  // lastActiveAt is in seconds (from getCurrentTimestamp()), so threshold must also be in seconds.
-  const thresholdSeconds = Math.floor(Date.now() / 1000) - days * 24 * 60 * 60;
-  return lastActiveAt < thresholdSeconds;
+  const archiveAfter = getSettingValueById("archiveTabAfter");
+  if (typeof archiveAfter !== "string" || archiveAfter === "never") return false;
+  const archiveAfterSeconds = ArchiveTabValueMap[archiveAfter as keyof typeof ArchiveTabValueMap];
+  if (typeof archiveAfterSeconds !== "number" || !isFinite(archiveAfterSeconds)) return false;
+  const nowSec = Math.floor(Date.now() / 1000);
+  return nowSec - lastActiveAt >= archiveAfterSeconds;
 }
 
 /**

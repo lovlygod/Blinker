@@ -942,10 +942,26 @@ export class TabService extends TypedEventEmitter<TabServiceEvents> {
       }
     }
 
-    // Show active tab in new space.
+    // Relocate pinned tabs that were focused in this space but moved away.
+    // This makes pinned tabs follow the user across space switches.
+    const layout = this.layouts.get(windowId);
+    if (layout) {
+      const focused = layout.getFocusedTab(spaceId);
+      if (focused && !focused.isDestroyed && focused.spaceId !== spaceId && focused.owner.kind === "pinned") {
+        // The focused tab for this space is a pinned tab now in another space — bring it back
+        const pinnedTab = this.pinnedTabs.get(focused.owner.pinnedTabId);
+        if (pinnedTab) {
+          pinnedTab.dissociate(focused.spaceId);
+          pinnedTab.associate(spaceId, focused.id);
+        }
+        this.moveTabToSpace(focused.id, spaceId);
+        // moveTabToSpace calls activateTab internally
+        return;
+      }
+    }
+
     // If no active node is set yet (e.g. tabs were restored asleep), activate
     // the focused tab or the most recently active one.
-    const layout = this.layouts.get(windowId);
     if (layout && !layout.getActiveNode(spaceId)) {
       const focused = layout.getFocusedTab(spaceId);
       if (focused && !focused.isDestroyed) {

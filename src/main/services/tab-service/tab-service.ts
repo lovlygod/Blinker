@@ -1009,15 +1009,20 @@ export class TabService extends TypedEventEmitter<TabServiceEvents> {
       // Exit tab fullscreen when OS window exits fullscreen (register once per window)
       this.ensureWindowFullscreenListener(windowId);
 
-      // Register any existing pinned tab nodes from this profile into the new layout
+      // Register any existing pinned tab nodes from this profile into the new layout.
+      // We search ALL layouts to find the node because the tab's window/space may have
+      // changed since propagation (e.g. cross-window move updates tab.getWindow()).
       const spaceData = spacesController.getFromCache(spaceId);
       if (spaceData) {
         for (const pinnedTab of this.pinnedTabs.values()) {
           if (pinnedTab.profileId !== spaceData.profileId) continue;
           const existingTab = this.findAssociatedTab(pinnedTab);
           if (!existingTab) continue;
-          const existingLayout = this.getLayout(existingTab.getWindow().id, existingTab.spaceId);
-          const existingNode = existingLayout?.getNodeForTab(existingTab.id);
+          let existingNode: TabLayoutNode | undefined;
+          for (const otherLayout of this.layouts.values()) {
+            existingNode = otherLayout.getNodeForTab(existingTab.id);
+            if (existingNode) break;
+          }
           if (existingNode && !layout.getNode(existingNode.id)) {
             layout.addExistingNode(existingNode);
           }

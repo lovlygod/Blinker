@@ -174,6 +174,8 @@ export class Tab extends TypedEventEmitter<TabEvents> {
   public _needsInitialLoad: boolean = false;
   /** Last webContents created by a new-tab-requested event (for window.open). */
   public _lastCreatedWebContents: WebContents | null = null;
+  /** True while the tab is being transferred between windows (suppresses extension callbacks). */
+  public _isTransferring: boolean = false;
 
   constructor(details: TabCreationDetails, options: TabCreationOptions) {
     super();
@@ -276,6 +278,15 @@ export class Tab extends TypedEventEmitter<TabEvents> {
     } else if (this.view) {
       this.layer = new Layer(window.layerManager, this.view, zIndexes.tab, focusPriorities.tab, createModalTo("tab"));
       window.layerManager?.push(this.layer);
+    }
+
+    // Re-register with extensions so the library's window mapping is updated
+    if (this.webContents && !this.webContents.isDestroyed()) {
+      const extensions = this.loadedProfile.extensions;
+      this._isTransferring = true;
+      extensions.removeTab(this.webContents);
+      extensions.addTab(this.webContents, window.browserWindow);
+      this._isTransferring = false;
     }
 
     // Re-attach fullscreen listener to new window

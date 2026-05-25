@@ -156,6 +156,7 @@ export class Tab extends TypedEventEmitter<TabEvents> {
 
   // Coalescing
   private _updatePending: boolean = false;
+  private _pendingUpdatedProps: Set<TabPublicProperty> = new Set();
 
   // Fullscreen cleanup
   private _disconnectLeaveFullScreen: (() => void) | null = null;
@@ -637,12 +638,17 @@ export class Tab extends TypedEventEmitter<TabEvents> {
   }
 
   private scheduleUpdate(properties: TabPublicProperty[]): void {
+    for (const prop of properties) {
+      this._pendingUpdatedProps.add(prop);
+    }
     if (this._updatePending) return;
     this._updatePending = true;
     queueMicrotask(() => {
       this._updatePending = false;
+      const merged = Array.from(this._pendingUpdatedProps);
+      this._pendingUpdatedProps.clear();
       if (!this.isDestroyed) {
-        this.emit("updated", properties);
+        this.emit("updated", merged);
       }
     });
   }

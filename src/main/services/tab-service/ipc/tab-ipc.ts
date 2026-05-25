@@ -66,8 +66,11 @@ export class TabIPC {
   private scheduleProcessing(): void {
     if (this.queueTimeout) return;
     this.queueTimeout = setTimeout(() => {
-      this.processQueues();
-      this.queueTimeout = null;
+      try {
+        this.processQueues();
+      } finally {
+        this.queueTimeout = null;
+      }
     }, DEBOUNCE_MS);
   }
 

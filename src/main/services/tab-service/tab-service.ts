@@ -420,7 +420,11 @@ export class TabService extends TypedEventEmitter<TabServiceEvents> {
   public activateNextTab(windowId: number, spaceId: string): void {
     const layout = this.layouts.get(windowId);
     if (!layout) return;
-    layout.activateNextNode(spaceId);
+    const node = layout.activateNextNode(spaceId);
+    if (node) {
+      this.handlePageBoundsChanged(windowId);
+      this.emitStructuralChange(windowId);
+    }
   }
 
   /**
@@ -429,7 +433,11 @@ export class TabService extends TypedEventEmitter<TabServiceEvents> {
   public activatePreviousTab(windowId: number, spaceId: string): void {
     const layout = this.layouts.get(windowId);
     if (!layout) return;
-    layout.activatePreviousNode(spaceId);
+    const node = layout.activatePreviousNode(spaceId);
+    if (node) {
+      this.handlePageBoundsChanged(windowId);
+      this.emitStructuralChange(windowId);
+    }
   }
 
   /**
@@ -1442,8 +1450,11 @@ export class TabService extends TypedEventEmitter<TabServiceEvents> {
         navHistory.push({ title: entry.title || "", url: entry.url, pageState: entry.pageState });
       }
       navHistoryIndex = history.getActiveIndex();
+    } else if (tab.navHistory.length > 0) {
+      navHistory.push(...tab.navHistory);
+      navHistoryIndex = tab.navHistoryIndex;
     } else if (tab.url) {
-      navHistory.push({ title: tab.title, url: tab.url }); // no pageState available when asleep
+      navHistory.push({ title: tab.title, url: tab.url });
       navHistoryIndex = 0;
     }
 

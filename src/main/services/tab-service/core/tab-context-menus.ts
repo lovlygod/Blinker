@@ -106,13 +106,7 @@ export function showPinnedTabContextMenu(tabService: TabService, pinnedTabId: st
     new MenuItem({
       label: "Unpin",
       click: () => {
-        const removedTabIds = tabService.removePinnedTab(pinnedTabId);
-        for (const removedTabId of removedTabIds) {
-          const tab = tabService.tabs.get(removedTabId);
-          if (tab && !tab.isDestroyed) {
-            tab.destroy();
-          }
-        }
+        tabService.unpinToTabList(pinnedTabId);
       }
     })
   );

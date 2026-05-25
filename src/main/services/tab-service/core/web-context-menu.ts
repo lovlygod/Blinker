@@ -52,7 +52,7 @@ export function createWebContextMenu(tab: Tab, window: BrowserWindow) {
 
       const createNewTab = async (url: string, overrideWindow?: BrowserWindow) => {
         const targetWindow = overrideWindow ?? window;
-        const spaceId = targetWindow.currentSpaceId;
+        const spaceId = targetWindow.currentSpaceId ?? tab.spaceId;
         if (!spaceId) return;
         const newTab = await tabService.createTab(targetWindow.id, tab.profileId, spaceId, undefined, { url });
         tabService.activateTab(newTab);

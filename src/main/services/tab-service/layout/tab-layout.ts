@@ -133,7 +133,6 @@ export class TabLayout extends TypedEventEmitter<TabLayoutEvents> {
     if (!node.isDestroyed) {
       node.destroy();
     }
-    this.emit("layout-node-destroyed", node);
   }
 
   // --- Active Node Management ---

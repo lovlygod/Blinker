@@ -84,6 +84,7 @@ async function createTabsFromPersistedData(tabDatas: PersistedTabData[]): Promis
     }
     const window = await browserWindowsController.create(windowType, windowOptions);
 
+    tabService.beginBatch();
     for (const tabData of tabs) {
       // Skip tabs whose profile couldn't be loaded (e.g. deleted profile)
       if (!loadedProfilesController.get(tabData.profileId)) {
@@ -105,6 +106,7 @@ async function createTabsFromPersistedData(tabDatas: PersistedTabData[]): Promis
 
       uniqueIdToTabId.set(tabData.uniqueId, tab.id);
     }
+    tabService.endBatch();
   }
 
   restoreLayoutNodes(persistedNodes, uniqueIdToTabId);

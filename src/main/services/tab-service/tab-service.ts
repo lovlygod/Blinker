@@ -69,6 +69,15 @@ export class TabService extends TypedEventEmitter<TabServiceEvents> {
   // --- Indexes for O(1) lookups ---
   private readonly windowIndex: Map<number, Set<Tab>> = new Map();
   private readonly spaceIndex: Map<string, Set<Tab>> = new Map();
+  private readonly webContentsIndex: WeakMap<WebContents, Tab> = new WeakMap();
+
+  // PiP counter — avoids iterating all tabs to check if any is in PiP
+  private _pipCount: number = 0;
+
+  // Emission suppression for batch operations (e.g., session restore).
+  // While > 0, structural/content emissions are deferred.
+  private _suppressEmissions: number = 0;
+  private _deferredStructural: Set<number> = new Set();
 
   /**
    * Hook for tab-sync: moves a tab to another window with placeholder handling.
@@ -211,6 +220,7 @@ export class TabService extends TypedEventEmitter<TabServiceEvents> {
     this.tabs.set(tab.id, tab);
     this.addToIndex(this.windowIndex, tab.getWindow().id, tab);
     this.addToIndex(this.spaceIndex, tab.spaceId, tab);
+    if (tab.webContents) this.webContentsIndex.set(tab.webContents, tab);
 
     // Get or create layout for this window-space
     const layout = this.getOrCreateLayout(windowId, spaceId!);
@@ -260,10 +270,7 @@ export class TabService extends TypedEventEmitter<TabServiceEvents> {
   }
 
   public getTabByWebContents(webContents: WebContents): Tab | undefined {
-    for (const tab of this.tabs.values()) {
-      if (tab.webContents === webContents) return tab;
-    }
-    return undefined;
+    return this.webContentsIndex.get(webContents);
   }
 
   public getTabsInWindow(windowId: number): Tab[] {
@@ -1110,9 +1117,8 @@ export class TabService extends TypedEventEmitter<TabServiceEvents> {
         // PiP transitions on visibility change
         if (wasVisible && !shouldBeVisible && tab.layer) {
           // Tab became hidden — auto-enter PiP if playing video
-          const anyTabInPiP = Array.from(this.tabs.values()).some((t) => t.id !== tab.id && t.isPictureInPicture);
           const isStillVisibleElsewhere = this.isTabVisibleInAnotherWindow(tab);
-          if (!anyTabInPiP && !isStillVisibleElsewhere) {
+          if (this._pipCount === 0 && !isStillVisibleElsewhere) {
             tab.enterPictureInPicture();
           }
         } else if (!wasVisible && shouldBeVisible && tab.isPictureInPicture) {
@@ -1217,19 +1223,55 @@ export class TabService extends TypedEventEmitter<TabServiceEvents> {
 
   public emitStructuralChange(windowId: number): void {
     if (quitController.isQuitting) return;
+    if (this._suppressEmissions > 0) {
+      this._deferredStructural.add(windowId);
+      return;
+    }
     this.emit("structural-change", windowId);
   }
 
   public emitContentChange(windowId: number, tabId: number): void {
     if (quitController.isQuitting) return;
+    if (this._suppressEmissions > 0) {
+      // Structural change will include content anyway
+      this._deferredStructural.add(windowId);
+      return;
+    }
     this.emit("content-change", windowId, tabId);
+  }
+
+  /**
+   * Suppress emissions during batch operations. Call endBatch() when done
+   * to flush a single structural change for each affected window.
+   */
+  public beginBatch(): void {
+    this._suppressEmissions++;
+  }
+
+  public endBatch(): void {
+    this._suppressEmissions--;
+    if (this._suppressEmissions <= 0) {
+      this._suppressEmissions = 0;
+      for (const windowId of this._deferredStructural) {
+        this.emit("structural-change", windowId);
+      }
+      this._deferredStructural.clear();
+    }
   }
 
   // --- Private Methods ---
 
   private wireTabEvents(tab: Tab): void {
-    tab.on("updated", () => {
+    tab.on("updated", (props) => {
       if (quitController.isQuitting) return;
+      // Track PiP counter for O(1) "any tab in PiP" checks
+      if (props.includes("isPictureInPicture")) {
+        this._pipCount += tab.isPictureInPicture ? 1 : -1;
+      }
+      // Update webContents index when tab wakes up (new webContents created)
+      if (props.includes("asleep") && !tab.asleep && tab.webContents) {
+        this.webContentsIndex.set(tab.webContents, tab);
+      }
       this.emitContentChange(tab.getWindow().id, tab.id);
     });
 

@@ -17,7 +17,7 @@ import { TabLayoutNode } from "../core/tab-layout-node";
 import { PinnedTab } from "../core/pinned-tab";
 import { isTabSyncEnabled, isSyncExcludedTab, isTabSynced } from "../tab-sync";
 
-const DEBOUNCE_MS = 80;
+const DEBOUNCE_MS = 32;
 
 /**
  * TabIPC — handles all IPC communication between the TabService and renderer.
@@ -32,6 +32,10 @@ export class TabIPC {
   private queueTimeout: NodeJS.Timeout | null = null;
 
   private pinnedTabChangeTimeout: NodeJS.Timeout | null = null;
+
+  // Serialization cache: tab.id → last serialized TabData
+  private tabCache: Map<number, TabData> = new Map();
+  private dirtyTabs: Set<number> = new Set();
 
   private readonly tabService: TabService;
 
@@ -55,7 +59,13 @@ export class TabIPC {
     });
 
     this.tabService.on("content-change", (windowId, tabId) => {
+      this.dirtyTabs.add(tabId);
       this.enqueueContentChange(windowId, tabId);
+    });
+
+    this.tabService.on("tab-removed", (tab) => {
+      this.tabCache.delete(tab.id);
+      this.dirtyTabs.delete(tab.id);
     });
 
     this.tabService.on("pinned-tab-changed", () => {
@@ -97,33 +107,47 @@ export class TabIPC {
    * broadcast regardless of sync setting (they are always-sync).
    */
   private enqueueContentChange(windowId: number, tabId: number): void {
-    let targetWindowIds: number[];
     const tab = this.tabService.getTabById(tabId);
-
     const shouldBroadcast = tab ? isTabSynced(tab) : false;
 
     if (shouldBroadcast) {
-      targetWindowIds = browserWindowsController
-        .getWindows()
-        .filter((w) => w.browserWindowType === "normal")
-        .map((w) => w.id);
-    } else {
-      targetWindowIds = [windowId];
-    }
-
-    for (const targetId of targetWindowIds) {
-      if (this.structuralQueue.has(targetId)) continue;
-      let tabIds = this.contentQueue.get(targetId);
-      if (!tabIds) {
-        tabIds = new Set();
-        this.contentQueue.set(targetId, tabIds);
+      // Broadcast to all normal windows
+      for (const win of browserWindowsController.getWindows()) {
+        if (win.browserWindowType !== "normal") continue;
+        if (this.structuralQueue.has(win.id)) continue;
+        let tabIds = this.contentQueue.get(win.id);
+        if (!tabIds) {
+          tabIds = new Set();
+          this.contentQueue.set(win.id, tabIds);
+        }
+        tabIds.add(tabId);
       }
-      tabIds.add(tabId);
+    } else {
+      // Single-window update (most common path)
+      if (!this.structuralQueue.has(windowId)) {
+        let tabIds = this.contentQueue.get(windowId);
+        if (!tabIds) {
+          tabIds = new Set();
+          this.contentQueue.set(windowId, tabIds);
+        }
+        tabIds.add(tabId);
+      }
     }
     this.scheduleProcessing();
   }
 
   private processQueues(): void {
+    // Re-serialize only dirty tabs before building payloads
+    for (const tabId of this.dirtyTabs) {
+      const tab = this.tabService.getTabById(tabId);
+      if (tab) {
+        this.tabCache.set(tabId, this.serializeTabForRenderer(tab));
+      } else {
+        this.tabCache.delete(tabId);
+      }
+    }
+    this.dirtyTabs.clear();
+
     // Structural changes (full refresh)
     for (const windowId of this.structuralQueue) {
       const window = browserWindowsController.getWindowById(windowId);
@@ -135,16 +159,23 @@ export class TabIPC {
     }
     this.structuralQueue.clear();
 
-    // Content-only changes
+    // Content-only changes (only send tabs that actually changed)
     for (const [windowId, tabIds] of this.contentQueue) {
       const window = browserWindowsController.getWindowById(windowId);
       if (!window) continue;
 
       const updatedTabs: TabData[] = [];
       for (const tabId of tabIds) {
-        const tab = this.tabService.getTabById(tabId);
-        if (!tab) continue;
-        updatedTabs.push(this.serializeTabForRenderer(tab));
+        const cached = this.tabCache.get(tabId);
+        if (cached) {
+          updatedTabs.push(cached);
+        } else {
+          const tab = this.tabService.getTabById(tabId);
+          if (!tab) continue;
+          const data = this.serializeTabForRenderer(tab);
+          this.tabCache.set(tabId, data);
+          updatedTabs.push(data);
+        }
       }
 
       if (updatedTabs.length > 0) {
@@ -393,18 +424,30 @@ export class TabIPC {
       tabs = this.tabService.getTabsInWindow(windowId);
     }
 
-    // Include ALL tabs in the payload (pinned-tab-owned tabs need their loading
-    // state available to the renderer for the pin grid). The renderer filters
-    // out non-normal-owned tabs when building the sidebar tab list.
-    const tabDatas = tabs.map((tab) => this.serializeTabForRenderer(tab));
+    // Build tab data and collect spaces/windowIds in a single pass
+    const tabDatas: TabData[] = new Array(tabs.length);
+    const spaces = new Set<string>();
+    const relevantWindowIds = syncEnabled ? new Set<number>() : undefined;
 
-    // Collect layout nodes from all relevant windows/spaces
+    for (let i = 0; i < tabs.length; i++) {
+      const tab = tabs[i];
+      spaces.add(tab.spaceId);
+      if (relevantWindowIds) relevantWindowIds.add(tab.getWindow().id);
+
+      const cached = this.tabCache.get(tab.id);
+      if (cached) {
+        tabDatas[i] = cached;
+      } else {
+        const data = this.serializeTabForRenderer(tab);
+        this.tabCache.set(tab.id, data);
+        tabDatas[i] = data;
+      }
+    }
+
+    // Collect layout nodes from relevant layouts
     const layoutNodes: TabLayoutNodeData[] = [];
-    const spaces = new Set(tabs.map((t) => t.spaceId));
 
-    if (syncEnabled) {
-      // Include layout nodes from all windows that have tabs we're showing
-      const relevantWindowIds = new Set(tabs.map((t) => t.getWindow().id));
+    if (syncEnabled && relevantWindowIds) {
       for (const relWindowId of relevantWindowIds) {
         for (const spaceId of spaces) {
           const relLayout = this.tabService.getLayout(relWindowId, spaceId);

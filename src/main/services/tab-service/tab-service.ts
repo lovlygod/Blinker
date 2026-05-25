@@ -641,6 +641,16 @@ export class TabService extends TypedEventEmitter<TabServiceEvents> {
     });
 
     pinnedTab.associate(spaceId, tab.id);
+
+    // Propagate pinned tab node to all layouts in the same profile
+    const layout = this.getLayout(window.id, spaceId);
+    if (layout) {
+      const node = layout.getNodeForTab(tab.id);
+      if (node) {
+        this.propagatePinnedTabNode(node, pinnedTab.profileId);
+      }
+    }
+
     this.reorderPinnedTabsInSpace(window.id, spaceId);
     this.activateTab(tab);
     return true;
@@ -655,6 +665,21 @@ export class TabService extends TypedEventEmitter<TabServiceEvents> {
       if (tab && !tab.isDestroyed) return tab;
     }
     return null;
+  }
+
+  /**
+   * Register a pinned tab's layout node in all layouts belonging to the same profile.
+   * The node uses activeLayout to determine which layout shows real content vs placeholder.
+   */
+  public propagatePinnedTabNode(node: TabLayoutNode, profileId: string): void {
+    for (const layout of this.layouts.values()) {
+      if (layout.getNode(node.id)) continue;
+      // Check if this layout's space belongs to the same profile
+      const spaceData = spacesController.getFromCache(layout.spaceId);
+      if (spaceData && spaceData.profileId === profileId) {
+        layout.addExistingNode(node);
+      }
+    }
   }
 
   /**
@@ -920,6 +945,21 @@ export class TabService extends TypedEventEmitter<TabServiceEvents> {
 
       // Exit tab fullscreen when OS window exits fullscreen (register once per window)
       this.ensureWindowFullscreenListener(windowId);
+
+      // Register any existing pinned tab nodes from this profile into the new layout
+      const spaceData = spacesController.getFromCache(spaceId);
+      if (spaceData) {
+        for (const pinnedTab of this.pinnedTabs.values()) {
+          if (pinnedTab.profileId !== spaceData.profileId) continue;
+          const existingTab = this.findAssociatedTab(pinnedTab);
+          if (!existingTab) continue;
+          const existingLayout = this.getLayout(existingTab.getWindow().id, existingTab.spaceId);
+          const existingNode = existingLayout?.getNodeForTab(existingTab.id);
+          if (existingNode && !layout.getNode(existingNode.id)) {
+            layout.addExistingNode(existingNode);
+          }
+        }
+      }
     }
     return layout;
   }

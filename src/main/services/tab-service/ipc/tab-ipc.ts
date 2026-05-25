@@ -393,36 +393,34 @@ export class TabIPC {
       tabs = this.tabService.getTabsInWindow(windowId);
     }
 
-    const layout = this.tabService.layouts.get(windowId);
-
     // Include ALL tabs in the payload (pinned-tab-owned tabs need their loading
     // state available to the renderer for the pin grid). The renderer filters
     // out non-normal-owned tabs when building the sidebar tab list.
     const tabDatas = tabs.map((tab) => this.serializeTabForRenderer(tab));
 
-    // Collect layout nodes from all relevant windows
+    // Collect layout nodes from all relevant windows/spaces
     const layoutNodes: TabLayoutNodeData[] = [];
+    const spaces = new Set(tabs.map((t) => t.spaceId));
+
     if (syncEnabled) {
       // Include layout nodes from all windows that have tabs we're showing
       const relevantWindowIds = new Set(tabs.map((t) => t.getWindow().id));
       for (const relWindowId of relevantWindowIds) {
-        const relLayout = this.tabService.layouts.get(relWindowId);
-        if (!relLayout) continue;
-        const spaces = new Set(tabs.filter((t) => t.getWindow().id === relWindowId).map((t) => t.spaceId));
         for (const spaceId of spaces) {
-          const nodes = relLayout.getNodesInSpace(spaceId);
-          for (const node of nodes) {
+          const relLayout = this.tabService.getLayout(relWindowId, spaceId);
+          if (!relLayout) continue;
+          for (const node of relLayout.getNodes()) {
             if (node.mode !== "single") {
               layoutNodes.push(this.serializeLayoutNode(node));
             }
           }
         }
       }
-    } else if (layout) {
-      const spaces = new Set(tabs.map((t) => t.spaceId));
+    } else {
       for (const spaceId of spaces) {
-        const nodes = layout.getNodesInSpace(spaceId);
-        for (const node of nodes) {
+        const layout = this.tabService.getLayout(windowId, spaceId);
+        if (!layout) continue;
+        for (const node of layout.getNodes()) {
           if (node.mode !== "single") {
             layoutNodes.push(this.serializeLayoutNode(node));
           }
@@ -430,17 +428,17 @@ export class TabIPC {
       }
     }
 
-    // Focused and active maps — always from this window's layout
+    // Focused and active maps — from this window's per-space layouts
     const focusedTabIds: WindowFocusedTabIds = {};
     const activeLayoutNodeIds: WindowActiveLayoutNodeIds = {};
 
-    const spaces = new Set(tabs.map((t) => t.spaceId));
     for (const spaceId of spaces) {
+      const layout = this.tabService.getLayout(windowId, spaceId);
       if (layout) {
-        const focusedTab = layout.getFocusedTab(spaceId);
+        const focusedTab = layout.getFocusedTab();
         if (focusedTab) focusedTabIds[spaceId] = focusedTab.id;
 
-        const activeNode = layout.getActiveNode(spaceId);
+        const activeNode = layout.getActiveNode();
         if (activeNode) activeLayoutNodeIds[spaceId] = activeNode.id;
       }
     }

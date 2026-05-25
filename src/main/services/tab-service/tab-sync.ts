@@ -225,7 +225,7 @@ async function moveActiveTabToWindow(window: BrowserWindow, isStale?: () => bool
   if (isSyncExcludedTab(focusedTab)) return;
 
   // Move the focused tab (and all tabs in its layout node)
-  const layout = tabService.layouts.get(window.id);
+  const layout = tabService.getLayout(window.id, focusedTab.spaceId);
   if (!layout) return;
 
   const node = layout.getNodeForTab(focusedTab.id);
@@ -244,7 +244,7 @@ async function moveActiveTabToWindow(window: BrowserWindow, isStale?: () => bool
 export async function moveTabOrGroupToWindow(tab: Tab, window: BrowserWindow): Promise<void> {
   clearPlaceholderInRenderer(window.id);
 
-  const layout = tabService.layouts.get(tab.getWindow().id);
+  const layout = tabService.getLayout(tab.getWindow().id, tab.spaceId);
   if (layout) {
     const node = layout.getNodeForTab(tab.id);
     if (node) {

@@ -423,7 +423,7 @@ export class BrowserWindow extends BaseWindow<BrowserWindowEvents> {
         }
       }
 
-      tabService.removeLayout(this.id);
+      tabService.removeAllLayoutsForWindow(this.id);
       this.omnibox.destroy();
       this.layerManager.destroy();
     }

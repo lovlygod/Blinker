@@ -5,19 +5,18 @@ import { TabPositioner } from "./tab-positioner";
 import { TabLayoutNodeMode } from "~/types/tab-service";
 
 /**
- * TabLayout — one per window.
+ * TabLayout — one per window-space.
  *
- * Holds all TabLayoutNodes for a window. At most one layout node
- * is active (visible) at a time per space.
+ * Each TabLayout manages the layout nodes for a single space within
+ * a single window. At most one layout node is active (visible) at a time.
  *
  * Responsibilities:
- * - Tracks active layout node per space
- * - Tracks focused tab per space
+ * - Tracks the active layout node
+ * - Tracks the focused tab (last interacted with)
  * - Manages activation history for smart tab switching on close
+ * - Controls visibility of its managed nodes
  * - Delegates position management to TabPositioner
  */
-
-type WindowSpaceKey = `${number}-${string}`;
 
 type TabLayoutEvents = {
   "active-changed": [windowId: number, spaceId: string];
@@ -29,27 +28,28 @@ type TabLayoutEvents = {
 
 export class TabLayout extends TypedEventEmitter<TabLayoutEvents> {
   public readonly windowId: number;
+  public readonly spaceId: string;
   public readonly positioner: TabPositioner;
   public isDestroyed: boolean = false;
+  public visible: boolean = false;
 
-  // Active layout node per space
-  private activeNodeMap: Map<WindowSpaceKey, TabLayoutNode> = new Map();
-  // Focused tab per space
-  private focusedTabMap: Map<WindowSpaceKey, Tab> = new Map();
-  // Activation history per space (layout node IDs)
-  private activationHistory: Map<WindowSpaceKey, string[]> = new Map();
-  // All layout nodes in this window
+  // Active layout node for this layout
+  private activeNode: TabLayoutNode | null = null;
+  // Focused tab (last interacted with)
+  private focusedTab: Tab | null = null;
+  // Activation history (layout node IDs, most recent last)
+  private activationHistory: string[] = [];
+  // All layout nodes in this layout
   private layoutNodes: Map<string, TabLayoutNode> = new Map();
   // Index: tabId → node (for O(1) getNodeForTab)
   private tabToNode: Map<number, TabLayoutNode> = new Map();
-  // Index: spaceId → Set<node> (for O(1) getNodesInSpace)
-  private spaceToNodes: Map<string, Set<TabLayoutNode>> = new Map();
 
   private layoutNodeCounter: number = 0;
 
-  constructor(windowId: number, positioner: TabPositioner) {
+  constructor(windowId: number, spaceId: string, positioner: TabPositioner) {
     super();
     this.windowId = windowId;
+    this.spaceId = spaceId;
     this.positioner = positioner;
   }
 
@@ -88,13 +88,11 @@ export class TabLayout extends TypedEventEmitter<TabLayoutEvents> {
   }
 
   /**
-   * Get all layout nodes in a space.
+   * Get all layout nodes in this layout (non-destroyed).
    */
-  public getNodesInSpace(spaceId: string): TabLayoutNode[] {
-    const set = this.spaceToNodes.get(spaceId);
-    if (!set) return [];
+  public getNodes(): TabLayoutNode[] {
     const result: TabLayoutNode[] = [];
-    for (const node of set) {
+    for (const node of this.layoutNodes.values()) {
       if (!node.isDestroyed) result.push(node);
     }
     return result;
@@ -110,9 +108,8 @@ export class TabLayout extends TypedEventEmitter<TabLayoutEvents> {
   /**
    * Get all layout nodes, sorted by position.
    */
-  public getAllNodesSorted(spaceId: string): TabLayoutNode[] {
-    const nodes = this.getNodesInSpace(spaceId);
-    // Invalidate cached positions since tab positions may have changed
+  public getAllNodesSorted(): TabLayoutNode[] {
+    const nodes = this.getNodes();
     for (const node of nodes) {
       node.invalidatePosition();
     }
@@ -127,13 +124,11 @@ export class TabLayout extends TypedEventEmitter<TabLayoutEvents> {
     if (!node) return;
 
     this.layoutNodes.delete(nodeId);
-    this.removeFromAllHistory(nodeId);
+    this.removeFromHistory(nodeId);
 
     // Clear active reference if this was active
-    for (const [key, activeNode] of this.activeNodeMap) {
-      if (activeNode.id === nodeId) {
-        this.activeNodeMap.delete(key);
-      }
+    if (this.activeNode?.id === nodeId) {
+      this.activeNode = null;
     }
 
     if (!node.isDestroyed) {
@@ -144,131 +139,100 @@ export class TabLayout extends TypedEventEmitter<TabLayoutEvents> {
   // --- Active Node Management ---
 
   /**
-   * Set the active layout node for a space.
+   * Set the active layout node.
    */
-  public setActiveNode(spaceId: string, node: TabLayoutNode): void {
-    const key = this.makeKey(spaceId);
-    this.activeNodeMap.set(key, node);
+  public setActiveNode(node: TabLayoutNode): void {
+    this.activeNode = node;
 
     // Update history
-    const history = this.activationHistory.get(key) ?? [];
-    const existingIdx = history.indexOf(node.id);
-    if (existingIdx > -1) history.splice(existingIdx, 1);
-    history.push(node.id);
-    this.activationHistory.set(key, history);
+    const existingIdx = this.activationHistory.indexOf(node.id);
+    if (existingIdx > -1) this.activationHistory.splice(existingIdx, 1);
+    this.activationHistory.push(node.id);
 
     // Update focused tab
     if (node.frontTab) {
-      this.setFocusedTab(spaceId, node.frontTab);
+      this.setFocusedTab(node.frontTab);
     }
 
-    this.emit("active-changed", this.windowId, spaceId);
+    this.emit("active-changed", this.windowId, this.spaceId);
   }
 
   /**
-   * Get the active layout node for a space.
+   * Get the active layout node.
    */
-  public getActiveNode(spaceId: string): TabLayoutNode | undefined {
-    return this.activeNodeMap.get(this.makeKey(spaceId));
+  public getActiveNode(): TabLayoutNode | null {
+    return this.activeNode;
   }
 
   /**
    * Remove active node and select next based on history/position.
    */
-  public removeActiveAndSelectNext(spaceId: string, closedPosition?: number): TabLayoutNode | undefined {
-    const key = this.makeKey(spaceId);
-    this.activeNodeMap.delete(key);
-    this.focusedTabMap.delete(key);
+  public removeActiveAndSelectNext(closedPosition?: number): TabLayoutNode | null {
+    this.activeNode = null;
+    this.focusedTab = null;
 
     // Try from history
-    const history = this.activationHistory.get(key);
-    if (history) {
-      for (let i = history.length - 1; i >= 0; i--) {
-        const node = this.layoutNodes.get(history[i]);
-        if (node && !node.isDestroyed && node.spaceId === spaceId && node.tabCount > 0) {
-          this.setActiveNode(spaceId, node);
-          return node;
-        }
+    for (let i = this.activationHistory.length - 1; i >= 0; i--) {
+      const node = this.layoutNodes.get(this.activationHistory[i]);
+      if (node && !node.isDestroyed && node.tabCount > 0) {
+        this.setActiveNode(node);
+        return node;
       }
     }
 
     // Fall back to position-based
-    const sorted = this.getAllNodesSorted(spaceId);
+    const sorted = this.getAllNodesSorted();
     if (sorted.length === 0) {
-      this.emit("active-changed", this.windowId, spaceId);
-      return undefined;
+      this.emit("active-changed", this.windowId, this.spaceId);
+      return null;
     }
 
     if (closedPosition !== undefined) {
       const next = sorted.find((n) => n.position >= closedPosition) ?? sorted[sorted.length - 1];
-      this.setActiveNode(spaceId, next);
+      this.setActiveNode(next);
       return next;
     }
 
-    this.setActiveNode(spaceId, sorted[0]);
+    this.setActiveNode(sorted[0]);
     return sorted[0];
-  }
-
-  /**
-   * Activate the next node in visual order (wraps).
-   */
-  public activateNextNode(spaceId: string): TabLayoutNode | undefined {
-    return this.activateAdjacentNode(spaceId, 1);
-  }
-
-  /**
-   * Activate the previous node in visual order (wraps).
-   */
-  public activatePreviousNode(spaceId: string): TabLayoutNode | undefined {
-    return this.activateAdjacentNode(spaceId, -1);
   }
 
   /**
    * Get the next/previous node without activating it.
    */
-  public getAdjacentNode(spaceId: string, delta: 1 | -1): TabLayoutNode | undefined {
-    const sorted = this.getAllNodesSorted(spaceId);
+  public getAdjacentNode(delta: 1 | -1): TabLayoutNode | undefined {
+    const sorted = this.getAllNodesSorted();
     if (sorted.length === 0) return undefined;
     if (sorted.length === 1) return sorted[0];
 
-    const active = this.getActiveNode(spaceId);
-    if (!active) return sorted[0];
+    if (!this.activeNode) return sorted[0];
 
-    const idx = sorted.findIndex((n) => n.id === active.id);
+    const idx = sorted.findIndex((n) => n.id === this.activeNode!.id);
     const nextIdx = (idx + delta + sorted.length) % sorted.length;
     return sorted[nextIdx];
   }
 
-  private activateAdjacentNode(spaceId: string, delta: 1 | -1): TabLayoutNode | undefined {
-    const node = this.getAdjacentNode(spaceId, delta);
-    if (node) {
-      this.setActiveNode(spaceId, node);
-    }
-    return node;
-  }
-
   /**
-   * Check if a tab is in the currently active layout node for its space.
+   * Check if a tab is in the currently active layout node.
    */
   public isTabActive(tab: Tab): boolean {
-    const active = this.getActiveNode(tab.spaceId);
-    if (!active) return false;
-    return active.hasTab(tab.id);
+    if (!this.activeNode) return false;
+    return this.activeNode.hasTab(tab.id);
   }
 
   // --- Focused Tab ---
 
-  public setFocusedTab(spaceId: string, tab: Tab): void {
-    this.focusedTabMap.set(this.makeKey(spaceId), tab);
-    this.emit("focused-tab-changed", this.windowId, spaceId);
+  public setFocusedTab(tab: Tab): void {
+    this.focusedTab = tab;
+    this.emit("focused-tab-changed", this.windowId, this.spaceId);
   }
 
-  public getFocusedTab(spaceId: string): Tab | undefined {
-    return this.focusedTabMap.get(this.makeKey(spaceId));
+  public getFocusedTab(): Tab | null {
+    return this.focusedTab;
   }
 
-  public removeFocusedTab(spaceId: string): void {
-    this.focusedTabMap.delete(this.makeKey(spaceId));
+  public removeFocusedTab(): void {
+    this.focusedTab = null;
   }
 
   // --- Lifecycle ---
@@ -281,11 +245,10 @@ export class TabLayout extends TypedEventEmitter<TabLayoutEvents> {
       if (!node.isDestroyed) node.destroy();
     }
     this.layoutNodes.clear();
-    this.activeNodeMap.clear();
-    this.focusedTabMap.clear();
-    this.activationHistory.clear();
+    this.activeNode = null;
+    this.focusedTab = null;
+    this.activationHistory = [];
     this.tabToNode.clear();
-    this.spaceToNodes.clear();
 
     this.emit("destroyed");
     this.destroyEmitter();
@@ -293,74 +256,44 @@ export class TabLayout extends TypedEventEmitter<TabLayoutEvents> {
 
   // --- Private ---
 
-  private makeKey(spaceId: string): WindowSpaceKey {
-    return `${this.windowId}-${spaceId}`;
-  }
-
   private generateNodeId(): string {
-    return `ln-${this.windowId}-${this.layoutNodeCounter++}`;
+    return `ln-${this.windowId}-${this.spaceId.slice(0, 8)}-${this.layoutNodeCounter++}`;
   }
 
   private registerNode(node: TabLayoutNode): void {
     this.layoutNodes.set(node.id, node);
 
-    // Update indexes
+    // Update tabToNode index
     for (const tab of node.tabs) {
       this.tabToNode.set(tab.id, node);
     }
-    this.addNodeToSpaceIndex(node);
 
-    // Listen for tab additions/removals to maintain indexes
+    // Listen for tab additions/removals to maintain index
     node.on("tab-added", (tab) => {
       this.tabToNode.set(tab.id, node);
     });
     node.on("tab-removed", (tab) => {
       this.tabToNode.delete(tab.id);
     });
-    node.on("space-changed", (oldSpaceId) => {
-      const oldSet = this.spaceToNodes.get(oldSpaceId);
-      if (oldSet) {
-        oldSet.delete(node);
-        if (oldSet.size === 0) this.spaceToNodes.delete(oldSpaceId);
-      }
-      this.addNodeToSpaceIndex(node);
-    });
 
     node.on("destroyed", () => {
       this.layoutNodes.delete(node.id);
-      this.removeFromAllHistory(node.id);
-      // Clean up indexes
+      this.removeFromHistory(node.id);
+      // Clean up index
       for (const tab of node.tabs) {
         this.tabToNode.delete(tab.id);
       }
-      this.removeNodeFromSpaceIndex(node);
+      if (this.activeNode?.id === node.id) {
+        this.activeNode = null;
+      }
       this.emit("layout-node-destroyed", node);
     });
 
     this.emit("layout-node-created", node);
   }
 
-  private addNodeToSpaceIndex(node: TabLayoutNode): void {
-    let set = this.spaceToNodes.get(node.spaceId);
-    if (!set) {
-      set = new Set();
-      this.spaceToNodes.set(node.spaceId, set);
-    }
-    set.add(node);
-  }
-
-  private removeNodeFromSpaceIndex(node: TabLayoutNode): void {
-    const set = this.spaceToNodes.get(node.spaceId);
-    if (set) {
-      set.delete(node);
-      if (set.size === 0) this.spaceToNodes.delete(node.spaceId);
-    }
-  }
-
-  private removeFromAllHistory(nodeId: string): void {
-    for (const history of this.activationHistory.values()) {
-      const idx = history.indexOf(nodeId);
-      if (idx > -1) history.splice(idx, 1);
-    }
+  private removeFromHistory(nodeId: string): void {
+    const idx = this.activationHistory.indexOf(nodeId);
+    if (idx > -1) this.activationHistory.splice(idx, 1);
   }
 }

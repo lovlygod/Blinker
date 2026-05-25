@@ -53,8 +53,8 @@ export class TabService extends TypedEventEmitter<TabServiceEvents> {
   // All tabs
   public readonly tabs: Map<number, Tab> = new Map();
 
-  // Per-window layouts
-  public readonly layouts: Map<number, TabLayout> = new Map();
+  // Per-window-space layouts (key: `${windowId}-${spaceId}`)
+  public readonly layouts: Map<string, TabLayout> = new Map();
 
   // Pinned tabs
   public readonly pinnedTabs: Map<string, PinnedTab> = new Map();
@@ -211,8 +211,8 @@ export class TabService extends TypedEventEmitter<TabServiceEvents> {
     this.addToIndex(this.windowIndex, tab.getWindow().id, tab);
     this.addToIndex(this.spaceIndex, tab.spaceId, tab);
 
-    // Get or create layout for this window
-    const layout = this.getOrCreateLayout(windowId);
+    // Get or create layout for this window-space
+    const layout = this.getOrCreateLayout(windowId, spaceId!);
 
     // Create a single layout node for this tab
     layout.createSingleNode(tab);
@@ -310,10 +310,10 @@ export class TabService extends TypedEventEmitter<TabServiceEvents> {
    * Activate a layout node (makes it visible).
    */
   public activateNode(windowId: number, spaceId: string, node: TabLayoutNode): void {
-    const layout = this.layouts.get(windowId);
+    const layout = this.getLayout(windowId, spaceId);
     if (!layout) return;
 
-    layout.setActiveNode(spaceId, node);
+    layout.setActiveNode(node);
 
     // Update view visibility and bounds
     this.updateTabVisibility(windowId, spaceId);
@@ -334,7 +334,7 @@ export class TabService extends TypedEventEmitter<TabServiceEvents> {
     if (this._activatingTabIds.has(tab.id)) return;
 
     const windowId = tab.getWindow().id;
-    const layout = this.layouts.get(windowId);
+    const layout = this.getLayout(windowId, tab.spaceId);
     if (!layout) return;
 
     const node = layout.getNodeForTab(tab.id);
@@ -352,8 +352,8 @@ export class TabService extends TypedEventEmitter<TabServiceEvents> {
         node.setFrontTab(tab);
       }
 
-      layout.setActiveNode(tab.spaceId, node);
-      layout.setFocusedTab(tab.spaceId, tab);
+      layout.setActiveNode(node);
+      layout.setFocusedTab(tab);
 
       // Mark as recently active (prevents premature archive/sleep)
       tab.lastActiveAt = Math.floor(Date.now() / 1000);
@@ -399,8 +399,8 @@ export class TabService extends TypedEventEmitter<TabServiceEvents> {
     const fromWindowId = tab.getWindow().id;
     if (fromWindowId === toWindowId) return;
 
-    const fromLayout = this.layouts.get(fromWindowId);
-    const toLayout = this.getOrCreateLayout(toWindowId);
+    const fromLayout = this.getLayout(fromWindowId, tab.spaceId);
+    const toLayout = this.getOrCreateLayout(toWindowId, tab.spaceId);
 
     // Remove from old layout
     if (fromLayout) {
@@ -410,7 +410,7 @@ export class TabService extends TypedEventEmitter<TabServiceEvents> {
       } else if (node) {
         node.removeTab(tab);
       }
-      // Note: we intentionally keep the focusedTabMap entry in the old layout.
+      // Note: we intentionally keep the focusedTab in the old layout.
       // It serves as the window's "memory" of what tab it was viewing, so the
       // focus handler can pull it back when that window regains focus.
     }
@@ -423,9 +423,9 @@ export class TabService extends TypedEventEmitter<TabServiceEvents> {
    * Activate the next tab in visual order.
    */
   public activateNextTab(windowId: number, spaceId: string): void {
-    const layout = this.layouts.get(windowId);
+    const layout = this.getLayout(windowId, spaceId);
     if (!layout) return;
-    const node = layout.getAdjacentNode(spaceId, 1);
+    const node = layout.getAdjacentNode(1);
     if (node?.frontTab) {
       this.activateTab(node.frontTab);
     }
@@ -435,9 +435,9 @@ export class TabService extends TypedEventEmitter<TabServiceEvents> {
    * Activate the previous tab in visual order.
    */
   public activatePreviousTab(windowId: number, spaceId: string): void {
-    const layout = this.layouts.get(windowId);
+    const layout = this.getLayout(windowId, spaceId);
     if (!layout) return;
-    const node = layout.getAdjacentNode(spaceId, -1);
+    const node = layout.getAdjacentNode(-1);
     if (node?.frontTab) {
       this.activateTab(node.frontTab);
     }
@@ -447,7 +447,7 @@ export class TabService extends TypedEventEmitter<TabServiceEvents> {
    * Check if a tab is currently active.
    */
   public isTabActive(tab: Tab): boolean {
-    const layout = this.layouts.get(tab.getWindow().id);
+    const layout = this.getLayout(tab.getWindow().id, tab.spaceId);
     if (!layout) return false;
     return layout.isTabActive(tab);
   }
@@ -456,14 +456,14 @@ export class TabService extends TypedEventEmitter<TabServiceEvents> {
    * Get the focused tab for a space in a window.
    */
   public getFocusedTab(windowId: number, spaceId: string): Tab | undefined {
-    return this.layouts.get(windowId)?.getFocusedTab(spaceId);
+    return this.getLayout(windowId, spaceId)?.getFocusedTab() ?? undefined;
   }
 
   /**
    * Get the active layout node for a space in a window.
    */
   public getActiveNode(windowId: number, spaceId: string): TabLayoutNode | undefined {
-    return this.layouts.get(windowId)?.getActiveNode(spaceId);
+    return this.getLayout(windowId, spaceId)?.getActiveNode() ?? undefined;
   }
 
   // --- Layout Node Operations ---
@@ -476,11 +476,13 @@ export class TabService extends TypedEventEmitter<TabServiceEvents> {
     mode: Exclude<TabLayoutNodeMode, "single">,
     tabIds: number[]
   ): TabLayoutNode | null {
-    const layout = this.layouts.get(windowId);
-    if (!layout) return null;
-
     const tabs = tabIds.map((id) => this.tabs.get(id)).filter((t): t is Tab => !!t);
     if (tabs.length < 2) return null;
+
+    // All tabs must be in the same space
+    const spaceId = tabs[0].spaceId;
+    const layout = this.getLayout(windowId, spaceId);
+    if (!layout) return null;
 
     // Remove tabs from their current single nodes
     for (const tab of tabs) {
@@ -499,7 +501,8 @@ export class TabService extends TypedEventEmitter<TabServiceEvents> {
    * Dissolve a layout node back to individual single nodes.
    */
   public dissolveLayoutNode(nodeId: string, windowId: number): void {
-    const layout = this.layouts.get(windowId);
+    // Find the layout containing this node
+    const layout = this.findLayoutWithNode(nodeId, windowId);
     if (!layout) return;
 
     const node = layout.getNode(nodeId);
@@ -517,6 +520,16 @@ export class TabService extends TypedEventEmitter<TabServiceEvents> {
     if (tabs.length > 0) {
       this.activateTab(tabs[0]);
     }
+  }
+
+  /**
+   * Find a layout in a window that contains a specific node.
+   */
+  private findLayoutWithNode(nodeId: string, windowId: number): TabLayout | undefined {
+    for (const layout of this.getLayoutsForWindow(windowId)) {
+      if (layout.getNode(nodeId)) return layout;
+    }
+    return undefined;
   }
 
   // --- Pinned Tabs ---
@@ -790,7 +803,8 @@ export class TabService extends TypedEventEmitter<TabServiceEvents> {
     if (sourceSpaceId === spaceId) return;
 
     const windowId = tab.getWindow().id;
-    const layout = this.layouts.get(windowId);
+    const sourceLayout = this.getLayout(windowId, sourceSpaceId);
+    const targetLayout = this.getOrCreateLayout(windowId, spaceId);
 
     // Hide the tab before moving (it's leaving the source space)
     if (tab.visible) {
@@ -798,32 +812,37 @@ export class TabService extends TypedEventEmitter<TabServiceEvents> {
       tab.layer?.setVisible(false);
     }
 
-    // Move the layout node to the new space (this also updates tab.spaceId)
-    if (layout) {
-      const node = layout.getNodeForTab(tab.id);
+    // Remove from source layout and add to target layout
+    if (sourceLayout) {
+      const node = sourceLayout.getNodeForTab(tab.id);
       if (node) {
-        // If this node was active in the source space, clear it and select next
-        const activeInSource = layout.getActiveNode(sourceSpaceId);
-        const wasActive = activeInSource?.id === node.id;
+        const wasActive = sourceLayout.getActiveNode()?.id === node.id;
+        const nodePosition = node.position;
 
-        node.setSpace(spaceId);
+        // Destroy single node from source, or remove tab from multi-node
+        if (node.mode === "single") {
+          sourceLayout.destroyNode(node.id);
+        } else {
+          node.removeTab(tab);
+        }
 
         if (wasActive) {
-          layout.removeActiveAndSelectNext(sourceSpaceId, node.position);
+          sourceLayout.removeActiveAndSelectNext(nodePosition);
         }
-      } else {
-        tab.setSpace(spaceId);
       }
-    } else {
-      tab.setSpace(spaceId);
     }
+
+    // Update tab's space
+    tab.setSpace(spaceId);
+
+    // Create a new node in the target layout
+    targetLayout.createSingleNode(tab);
 
     // Clear focused tab references to this tab in the source space across ALL layouts.
     // This prevents STAW from thinking any window still "wants" this tab in the old space.
-    for (const [, otherLayout] of this.layouts) {
-      const focused = otherLayout.getFocusedTab(sourceSpaceId);
-      if (focused?.id === tab.id) {
-        otherLayout.removeFocusedTab(sourceSpaceId);
+    for (const layout of this.layouts.values()) {
+      if (layout.spaceId === sourceSpaceId && layout.getFocusedTab()?.id === tab.id) {
+        layout.removeFocusedTab();
       }
     }
 
@@ -852,44 +871,99 @@ export class TabService extends TypedEventEmitter<TabServiceEvents> {
 
   // --- Layout Management ---
 
-  public getOrCreateLayout(windowId: number): TabLayout {
-    let layout = this.layouts.get(windowId);
+  private layoutKey(windowId: number, spaceId: string): string {
+    return `${windowId}-${spaceId}`;
+  }
+
+  /**
+   * Get a layout for a specific window-space.
+   */
+  public getLayout(windowId: number, spaceId: string): TabLayout | undefined {
+    return this.layouts.get(this.layoutKey(windowId, spaceId));
+  }
+
+  /**
+   * Get all layouts for a given window.
+   */
+  public getLayoutsForWindow(windowId: number): TabLayout[] {
+    const result: TabLayout[] = [];
+    for (const layout of this.layouts.values()) {
+      if (layout.windowId === windowId) result.push(layout);
+    }
+    return result;
+  }
+
+  /**
+   * Get the currently visible layout for a window (matching current space).
+   */
+  public getVisibleLayout(windowId: number): TabLayout | undefined {
+    const window = browserWindowsController.getWindowById(windowId);
+    if (!window?.currentSpaceId) return undefined;
+    return this.getLayout(windowId, window.currentSpaceId);
+  }
+
+  public getOrCreateLayout(windowId: number, spaceId: string): TabLayout {
+    const key = this.layoutKey(windowId, spaceId);
+    let layout = this.layouts.get(key);
     if (!layout) {
-      layout = new TabLayout(windowId, this.positioner);
-      this.layouts.set(windowId, layout);
+      layout = new TabLayout(windowId, spaceId, this.positioner);
+      this.layouts.set(key, layout);
 
       // Forward events
-      layout.on("active-changed", (wId, spaceId) => {
-        this.updateTabVisibility(wId, spaceId);
-        this.emit("active-changed", wId, spaceId);
+      layout.on("active-changed", (wId, sId) => {
+        this.updateTabVisibility(wId, sId);
+        this.emit("active-changed", wId, sId);
       });
-      layout.on("focused-tab-changed", (wId, spaceId) => {
-        this.emit("focused-tab-changed", wId, spaceId);
+      layout.on("focused-tab-changed", (wId, sId) => {
+        this.emit("focused-tab-changed", wId, sId);
       });
 
-      // Exit tab fullscreen when OS window exits fullscreen
-      const window = browserWindowsController.getWindowById(windowId);
-      if (window) {
-        window.on("leave-full-screen", () => {
-          const currentSpaceId = window.currentSpaceId;
-          if (!currentSpaceId) return;
-          for (const tab of this.getTabsInWindowSpace(windowId, currentSpaceId)) {
-            if (tab.fullScreen) {
-              tab.setFullScreen(false);
-            }
-          }
-        });
-      }
+      // Exit tab fullscreen when OS window exits fullscreen (register once per window)
+      this.ensureWindowFullscreenListener(windowId);
     }
     return layout;
   }
 
-  public removeLayout(windowId: number): void {
-    const layout = this.layouts.get(windowId);
+  private _windowFullscreenListeners: Set<number> = new Set();
+
+  private ensureWindowFullscreenListener(windowId: number): void {
+    if (this._windowFullscreenListeners.has(windowId)) return;
+    this._windowFullscreenListeners.add(windowId);
+
+    const window = browserWindowsController.getWindowById(windowId);
+    if (window) {
+      window.on("leave-full-screen", () => {
+        const currentSpaceId = window.currentSpaceId;
+        if (!currentSpaceId) return;
+        for (const tab of this.getTabsInWindowSpace(windowId, currentSpaceId)) {
+          if (tab.fullScreen) {
+            tab.setFullScreen(false);
+          }
+        }
+      });
+    }
+  }
+
+  public removeLayout(windowId: number, spaceId: string): void {
+    const key = this.layoutKey(windowId, spaceId);
+    const layout = this.layouts.get(key);
     if (layout) {
       layout.destroy();
-      this.layouts.delete(windowId);
+      this.layouts.delete(key);
     }
+  }
+
+  /**
+   * Remove all layouts for a window (on window close).
+   */
+  public removeAllLayoutsForWindow(windowId: number): void {
+    for (const [key, layout] of this.layouts) {
+      if (layout.windowId === windowId) {
+        layout.destroy();
+        this.layouts.delete(key);
+      }
+    }
+    this._windowFullscreenListeners.delete(windowId);
   }
 
   // --- Tab Visibility ---
@@ -899,14 +973,14 @@ export class TabService extends TypedEventEmitter<TabServiceEvents> {
    * Tabs in the active node are shown; all others in that space are hidden.
    */
   private updateTabVisibility(windowId: number, spaceId: string): void {
-    const layout = this.layouts.get(windowId);
+    const layout = this.getLayout(windowId, spaceId);
     if (!layout) return;
 
-    const activeNode = layout.getActiveNode(spaceId);
+    const activeNode = layout.getActiveNode();
     const tabsInSpace = this.getTabsInWindowSpace(windowId, spaceId);
 
     for (const tab of tabsInSpace) {
-      const shouldBeVisible = activeNode !== undefined && activeNode.hasTab(tab.id);
+      const shouldBeVisible = activeNode !== null && activeNode.hasTab(tab.id);
       if (tab.visible !== shouldBeVisible) {
         const wasVisible = tab.visible;
 
@@ -943,12 +1017,13 @@ export class TabService extends TypedEventEmitter<TabServiceEvents> {
    */
   private isTabVisibleInAnotherWindow(tab: Tab): boolean {
     const tabWindowId = tab.getWindow().id;
-    for (const [windowId, layout] of this.layouts) {
-      if (windowId === tabWindowId) continue;
-      const window = browserWindowsController.getWindowById(windowId);
+    for (const layout of this.layouts.values()) {
+      if (layout.windowId === tabWindowId) continue;
+      if (layout.spaceId !== tab.spaceId) continue;
+      const window = browserWindowsController.getWindowById(layout.windowId);
       if (!window || window.destroyed || window.browserWindowType !== "normal") continue;
       if (window.currentSpaceId !== tab.spaceId) continue;
-      const activeNode = layout.getActiveNode(tab.spaceId);
+      const activeNode = layout.getActiveNode();
       if (activeNode && activeNode.hasTab(tab.id)) return true;
     }
     return false;
@@ -987,12 +1062,12 @@ export class TabService extends TypedEventEmitter<TabServiceEvents> {
     // Pinned tabs are NOT auto-relocated on space switch. They only move
     // when the user explicitly activates them (via clickPinnedTab).
 
-    const layout = this.layouts.get(windowId);
+    const layout = this.getLayout(windowId, spaceId);
 
     // If no active node is set yet (e.g. tabs were restored asleep), optionally
     // activate the focused tab or the most recently active one.
-    if (FLAGS.ACTIVATE_TAB_ON_SPACE_SWITCH && layout && !layout.getActiveNode(spaceId)) {
-      const focused = layout.getFocusedTab(spaceId);
+    if (FLAGS.ACTIVATE_TAB_ON_SPACE_SWITCH && layout && !layout.getActiveNode()) {
+      const focused = layout.getFocusedTab();
       if (focused && !focused.isDestroyed) {
         this.activateTab(focused);
         return;
@@ -1030,8 +1105,8 @@ export class TabService extends TypedEventEmitter<TabServiceEvents> {
       }
 
       // For layout nodes with multiple tabs (glance/split), compute sub-bounds
-      const layout = this.layouts.get(windowId);
-      const activeNode = layout?.getActiveNode(tab.spaceId);
+      const layout = this.getLayout(windowId, tab.spaceId);
+      const activeNode = layout?.getActiveNode();
       if (activeNode && activeNode.tabs.length > 1) {
         const tabIndex = activeNode.tabs.indexOf(tab);
         if (tabIndex >= 0) {
@@ -1140,9 +1215,9 @@ export class TabService extends TypedEventEmitter<TabServiceEvents> {
     });
 
     tab.on("focused", () => {
-      const currentLayout = this.layouts.get(tab.getWindow().id);
+      const currentLayout = this.getLayout(tab.getWindow().id, tab.spaceId);
       if (currentLayout && this.isTabActive(tab)) {
-        currentLayout.setFocusedTab(tab.spaceId, tab);
+        currentLayout.setFocusedTab(tab);
       }
     });
 
@@ -1179,7 +1254,7 @@ export class TabService extends TypedEventEmitter<TabServiceEvents> {
       const windowId = tab.getWindow().id;
       const spaceId = tab.spaceId;
       const position = tab.position;
-      const currentLayout = this.layouts.get(windowId);
+      const currentLayout = this.getLayout(windowId, spaceId);
 
       // Determine if tab was active. The once("destroyed") listener from
       // TabLayoutNode.addTab may have already removed the tab from its node
@@ -1187,7 +1262,7 @@ export class TabService extends TypedEventEmitter<TabServiceEvents> {
       // destroyed — that means this tab was its last occupant.
       let wasActive = false;
       if (currentLayout) {
-        const activeNode = currentLayout.getActiveNode(spaceId);
+        const activeNode = currentLayout.getActiveNode();
         if (activeNode) {
           wasActive = activeNode.hasTab(tab.id) || activeNode.isDestroyed;
         }
@@ -1218,7 +1293,7 @@ export class TabService extends TypedEventEmitter<TabServiceEvents> {
 
       // Handle active tab selection
       if (wasActive && currentLayout) {
-        currentLayout.removeActiveAndSelectNext(spaceId, position);
+        currentLayout.removeActiveAndSelectNext(position);
       }
 
       this.emitStructuralChange(windowId);
@@ -1249,11 +1324,11 @@ export class TabService extends TypedEventEmitter<TabServiceEvents> {
     }
 
     // If there's no active tab, activate the most recently active one
-    const layout = this.layouts.get(windowId);
-    if (!layout) return;
     const currentSpaceId = window.currentSpaceId;
     if (!currentSpaceId) return;
-    const activeNode = layout.getActiveNode(currentSpaceId);
+    const layout = this.getLayout(windowId, currentSpaceId);
+    if (!layout) return;
+    const activeNode = layout.getActiveNode();
     if (activeNode) return;
 
     // Find the best tab to activate

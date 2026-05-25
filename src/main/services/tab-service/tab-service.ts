@@ -914,10 +914,15 @@ export class TabService extends TypedEventEmitter<TabServiceEvents> {
     this.positioner.normalizePositions(this.getTabsInWindowSpace(windowId, spaceId));
     this.positioner.normalizePositions(this.getTabsInWindowSpace(windowId, sourceSpaceId));
 
-    // Update visibility in ALL windows that had the tab active in the source space.
-    // This ensures other windows (e.g. via STAW) stop showing the moved tab.
+    // Ensure the tab is fully hidden before re-activating in the new space.
+    // updateTabVisibility won't find this tab anymore (spaceId/windowId changed),
+    // so we must explicitly hide the layer here.
+    tab.visible = false;
+    tab.layer?.setVisible(false);
+
+    // Update visibility and UI in ALL windows that had the tab active in the source space.
     for (const { layout, wasActive } of affectedLayouts) {
-      if (wasActive && layout.windowId !== windowId) {
+      if (wasActive) {
         this.updateTabVisibility(layout.windowId, sourceSpaceId);
         this.emitStructuralChange(layout.windowId);
       }

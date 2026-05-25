@@ -1,6 +1,7 @@
 import { TypedEventEmitter } from "@/modules/typed-event-emitter";
 import { generateID } from "@/modules/utils";
 import { PersistedPinnedTabData } from "~/types/tab-service";
+import type { TabLayoutNode } from "./tab-layout-node";
 
 /**
  * PinnedTab — a persistent URL shortcut tied to a profile.
@@ -28,6 +29,9 @@ export class PinnedTab extends TypedEventEmitter<PinnedTabEvents> {
 
   /** Runtime: spaceId -> associated tab ID */
   private _associations: Map<string, number> = new Map();
+
+  /** Runtime: the shared layout node for this pinned tab (exists in all profile layouts). */
+  public layoutNode: TabLayoutNode | null = null;
 
   constructor(data: PersistedPinnedTabData) {
     super();

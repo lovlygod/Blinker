@@ -681,6 +681,7 @@ export class TabService extends TypedEventEmitter<TabServiceEvents> {
     if (layout) {
       const node = layout.getNodeForTab(tab.id);
       if (node) {
+        pinnedTab.layoutNode = node;
         this.propagatePinnedTabNode(node, pinnedTab.profileId);
       }
     }
@@ -1010,21 +1011,13 @@ export class TabService extends TypedEventEmitter<TabServiceEvents> {
       this.ensureWindowFullscreenListener(windowId);
 
       // Register any existing pinned tab nodes from this profile into the new layout.
-      // We search ALL layouts to find the node because the tab's window/space may have
-      // changed since propagation (e.g. cross-window move updates tab.getWindow()).
       const spaceData = spacesController.getFromCache(spaceId);
       if (spaceData) {
         for (const pinnedTab of this.pinnedTabs.values()) {
           if (pinnedTab.profileId !== spaceData.profileId) continue;
-          const existingTab = this.findAssociatedTab(pinnedTab);
-          if (!existingTab) continue;
-          let existingNode: TabLayoutNode | undefined;
-          for (const otherLayout of this.layouts.values()) {
-            existingNode = otherLayout.getNodeForTab(existingTab.id);
-            if (existingNode) break;
-          }
-          if (existingNode && !layout.getNode(existingNode.id)) {
-            layout.addExistingNode(existingNode);
+          const node = pinnedTab.layoutNode;
+          if (node && !node.isDestroyed && !layout.getNode(node.id)) {
+            layout.addExistingNode(node);
           }
         }
       }
@@ -1335,10 +1328,11 @@ export class TabService extends TypedEventEmitter<TabServiceEvents> {
         this.recentlyClosed.add(this.serializeTabForPersistence(tab));
       }
 
-      // Clean up pinned tab association
+      // Clean up pinned tab association and layout node reference
       const pinnedTab = this.getPinnedTabByAssociatedTabId(tab.id);
       if (pinnedTab) {
         pinnedTab.dissociateByTabId(tab.id);
+        pinnedTab.layoutNode = null;
       }
 
       // Remove from layout node (may already be removed by once listener)

@@ -979,35 +979,8 @@ export class TabService extends TypedEventEmitter<TabServiceEvents> {
       }
     }
 
-    // Relocate pinned tabs whose live tab is in another space.
-    // Pinned tabs sync across spaces — one live tab that follows the user.
-    // Only relocate pinned tabs whose profile matches the target space's profile.
-    const targetSpaceData = spacesController.getFromCache(spaceId);
-    for (const pinnedTab of this.pinnedTabs.values()) {
-      if (targetSpaceData && pinnedTab.profileId !== targetSpaceData.profileId) continue;
-
-      const liveTab = this.findAssociatedTab(pinnedTab);
-      if (!liveTab || liveTab.isDestroyed) continue;
-      if (liveTab.spaceId === spaceId && liveTab.getWindow().id === windowId) continue;
-
-      // Move to this window if needed
-      if (liveTab.getWindow().id !== windowId) {
-        this.migrateTabBetweenLayouts(liveTab, windowId);
-        liveTab.setWindow(window);
-      }
-
-      // Move to the target space if needed
-      if (liveTab.spaceId !== spaceId) {
-        const oldSpaceForTab = liveTab.spaceId;
-        pinnedTab.dissociate(oldSpaceForTab);
-        pinnedTab.associate(spaceId, liveTab.id);
-        this.moveTabToSpace(liveTab.id, spaceId);
-      } else {
-        this.activateTab(liveTab);
-      }
-    }
-
-    this.reorderPinnedTabsInSpace(windowId, spaceId);
+    // Pinned tabs are NOT auto-relocated on space switch. They only move
+    // when the user explicitly activates them (via clickPinnedTab).
 
     const layout = this.layouts.get(windowId);
 

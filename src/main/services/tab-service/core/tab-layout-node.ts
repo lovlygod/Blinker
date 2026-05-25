@@ -2,6 +2,7 @@ import { TypedEventEmitter } from "@/modules/typed-event-emitter";
 import { Tab } from "./tab";
 import { TabLayoutNodeMode } from "~/types/tab-service";
 import type { LayerType } from "~/layers";
+import type { TabLayout } from "../layout/tab-layout";
 
 /**
  * TabLayoutNode — represents tabs displayed together in a window.
@@ -38,6 +39,20 @@ export class TabLayoutNode extends TypedEventEmitter<TabLayoutNodeEvents> {
   private _destroyListeners: Map<number, () => void> = new Map();
   private _cachedPosition: number = 0;
   private _positionDirty: boolean = true;
+
+  /**
+   * All layouts this node is registered in.
+   * A node may belong to multiple layouts when STAW (sync tabs across windows)
+   * is enabled, or for pinned tabs which exist in all profile layouts.
+   */
+  private _memberLayouts: Set<TabLayout> = new Set();
+
+  /**
+   * The layout where this node shows real content.
+   * Other member layouts show a placeholder thumbnail.
+   * Null if the node is only in one layout (default case).
+   */
+  private _activeLayout: TabLayout | null = null;
 
   constructor(id: string, mode: TabLayoutNodeMode, initialTab: Tab, windowId: number) {
     super();
@@ -80,6 +95,57 @@ export class TabLayoutNode extends TypedEventEmitter<TabLayoutNodeEvents> {
 
   public get tabCount(): number {
     return this._tabs.length;
+  }
+
+  // --- Multi-Layout Membership ---
+
+  public get memberLayouts(): ReadonlySet<TabLayout> {
+    return this._memberLayouts;
+  }
+
+  public get activeLayout(): TabLayout | null {
+    return this._activeLayout;
+  }
+
+  /**
+   * Whether this node shows real content in the given layout,
+   * or a placeholder thumbnail.
+   */
+  public isActiveInLayout(layout: TabLayout): boolean {
+    // If no multi-layout, always active in its sole layout
+    if (this._activeLayout === null) return true;
+    return this._activeLayout === layout;
+  }
+
+  public addMemberLayout(layout: TabLayout): void {
+    this._memberLayouts.add(layout);
+    // If first layout, it's active by default
+    if (this._activeLayout === null && this._memberLayouts.size === 1) {
+      this._activeLayout = layout;
+    }
+  }
+
+  public removeMemberLayout(layout: TabLayout): void {
+    this._memberLayouts.delete(layout);
+    if (this._activeLayout === layout) {
+      // Fall back to first remaining layout or null
+      this._activeLayout = this._memberLayouts.size > 0 ? this._memberLayouts.values().next().value! : null;
+    }
+  }
+
+  /**
+   * Set the active layout (shows real content). Other layouts show placeholder.
+   * Emits "active-layout-changed" so the sync system can update placeholders.
+   */
+  public setActiveLayout(layout: TabLayout): void {
+    if (!this._memberLayouts.has(layout)) return;
+    if (this._activeLayout === layout) return;
+    const previous = this._activeLayout;
+    this._activeLayout = layout;
+    this.emit("changed");
+    // Update windowId to match the active layout
+    this.windowId = layout.windowId;
+    void previous; // previous is available for placeholder capture if needed
   }
 
   // --- Tab Management ---

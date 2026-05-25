@@ -263,6 +263,7 @@ export class TabLayout extends TypedEventEmitter<TabLayoutEvents> {
 
   private registerNode(node: TabLayoutNode): void {
     this.layoutNodes.set(node.id, node);
+    node.addMemberLayout(this);
 
     // Update tabToNode index
     for (const tab of node.tabs) {
@@ -280,6 +281,7 @@ export class TabLayout extends TypedEventEmitter<TabLayoutEvents> {
     node.on("destroyed", () => {
       this.layoutNodes.delete(node.id);
       this.removeFromHistory(node.id);
+      node.removeMemberLayout(this);
       // Clean up index
       for (const tab of node.tabs) {
         this.tabToNode.delete(tab.id);
@@ -291,6 +293,34 @@ export class TabLayout extends TypedEventEmitter<TabLayoutEvents> {
     });
 
     this.emit("layout-node-created", node);
+  }
+
+  /**
+   * Add an existing node to this layout (for STAW / pinned tab multi-layout membership).
+   * Unlike createSingleNode, this doesn't create a new node — it registers an existing one.
+   */
+  public addExistingNode(node: TabLayoutNode): void {
+    if (this.layoutNodes.has(node.id)) return;
+    this.registerNode(node);
+  }
+
+  /**
+   * Remove a node from this layout without destroying it.
+   * Used when a node is being unregistered from a secondary layout.
+   */
+  public removeNodeWithoutDestroy(nodeId: string): void {
+    const node = this.layoutNodes.get(nodeId);
+    if (!node) return;
+
+    this.layoutNodes.delete(nodeId);
+    this.removeFromHistory(nodeId);
+    node.removeMemberLayout(this);
+    for (const tab of node.tabs) {
+      this.tabToNode.delete(tab.id);
+    }
+    if (this.activeNode?.id === nodeId) {
+      this.activeNode = null;
+    }
   }
 
   private removeFromHistory(nodeId: string): void {

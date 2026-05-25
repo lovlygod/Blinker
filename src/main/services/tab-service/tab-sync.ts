@@ -259,8 +259,6 @@ function findWindowWithProfile(windows: BrowserWindow[], profileId: string): Bro
 }
 
 export function relocateTabsFromClosingWindow(closingWindow: BrowserWindow, tabs: Tab[]): Tab[] | null {
-  if (!isTabSyncEnabled()) return null;
-
   const closingWindowId = closingWindow.id;
   if (closingWindow.browserWindowType === "popup") return null;
 
@@ -269,11 +267,19 @@ export function relocateTabsFromClosingWindow(closingWindow: BrowserWindow, tabs
     .filter((w) => w.id !== closingWindowId && w.browserWindowType === "normal");
   if (survivingWindows.length === 0) return null;
 
+  const syncEnabled = isTabSyncEnabled();
   const defaultTargetWindow = survivingWindows[0];
   const relocatable = new Map<BrowserWindow, Tab[]>();
   const unrelocatable: Tab[] = [];
 
   for (const tab of tabs) {
+    // Pinned-tab-owned tabs always relocate; others only when sync is enabled
+    const shouldRelocate = tab.owner.kind === "pinned" || syncEnabled;
+    if (!shouldRelocate) {
+      unrelocatable.push(tab);
+      continue;
+    }
+
     const isInternal = tab.loadedProfile.profileData.internal;
     if (isInternal) {
       const targetWindow = findWindowWithProfile(survivingWindows, tab.profileId);
@@ -291,8 +297,11 @@ export function relocateTabsFromClosingWindow(closingWindow: BrowserWindow, tabs
     }
   }
 
+  if (relocatable.size === 0) return unrelocatable.length > 0 ? unrelocatable : null;
+
   for (const [targetWindow, windowTabs] of relocatable) {
     for (const tab of windowTabs) {
+      tabService.migrateTabBetweenLayouts(tab, targetWindow.id);
       prepareTabForWindowTransfer(tab);
       tab.setWindow(targetWindow);
     }

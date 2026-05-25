@@ -174,8 +174,6 @@ export class Tab extends TypedEventEmitter<TabEvents> {
   public _needsInitialLoad: boolean = false;
   /** Last webContents created by a new-tab-requested event (for window.open). */
   public _lastCreatedWebContents: WebContents | null = null;
-  /** True while the tab is being transferred between windows (suppresses extension callbacks). */
-  public _isTransferring: boolean = false;
 
   constructor(details: TabCreationDetails, options: TabCreationOptions) {
     super();
@@ -280,13 +278,11 @@ export class Tab extends TypedEventEmitter<TabEvents> {
       window.layerManager?.push(this.layer);
     }
 
-    // Re-register with extensions so the library's window mapping is updated
+    // Update the extensions library's internal window mapping for this tab.
+    // The library has no public moveTab API, so we patch the store directly.
     if (this.webContents && !this.webContents.isDestroyed()) {
-      const extensions = this.loadedProfile.extensions;
-      this._isTransferring = true;
-      extensions.removeTab(this.webContents);
-      extensions.addTab(this.webContents, window.browserWindow);
-      this._isTransferring = false;
+      const store = (this.loadedProfile.extensions as unknown as { ctx: { store: { tabToWindow: WeakMap<WebContents, Electron.BaseWindow> } } }).ctx.store;
+      store.tabToWindow.set(this.webContents, window.browserWindow);
     }
 
     // Re-attach fullscreen listener to new window

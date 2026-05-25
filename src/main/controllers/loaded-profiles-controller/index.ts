@@ -159,7 +159,7 @@ class LoadedProfilesController extends TypedEventEmitter<LoadedProfilesControlle
       },
       selectTab: (tabWebContents) => {
         const tab = tabService.getTabByWebContents(tabWebContents);
-        if (!tab || tab._isTransferring) return;
+        if (!tab) return;
 
         // Set the space for the window
         const window = tab.getWindow();
@@ -171,7 +171,7 @@ class LoadedProfilesController extends TypedEventEmitter<LoadedProfilesControlle
       },
       removeTab: (tabWebContents) => {
         const tab = tabService.getTabByWebContents(tabWebContents);
-        if (!tab || tab._isTransferring) return;
+        if (!tab) return;
 
         tab.destroy();
       },

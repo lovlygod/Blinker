@@ -538,11 +538,16 @@ export class Tab extends TypedEventEmitter<TabEvents> {
     const window = this.window;
     if (!window || window.destroyed) return;
 
-    const disconnect = window.connect("leave-full-screen", () => {
+    const handler = () => {
       this.setFullScreen(false);
-    });
+    };
+    window.on("leave-full-screen", handler);
 
-    this._disconnectLeaveFullScreen = disconnect;
+    this._disconnectLeaveFullScreen = () => {
+      if (!window.destroyed) {
+        window.off("leave-full-screen", handler);
+      }
+    };
   }
 
   // --- State Updates ---

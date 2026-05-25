@@ -513,8 +513,11 @@ export class TabService extends TypedEventEmitter<TabServiceEvents> {
     const tabs = tabIds.map((id) => this.tabs.get(id)).filter((t): t is Tab => !!t);
     if (tabs.length < 2) return null;
 
-    // All tabs must be in the same space
     const spaceId = tabs[0].spaceId;
+    if (!tabs.every((tab) => tab.spaceId === spaceId && tab.getWindow().id === windowId)) {
+      return null;
+    }
+
     const layout = this.getLayout(windowId, spaceId);
     if (!layout) return null;
 
@@ -657,6 +660,8 @@ export class TabService extends TypedEventEmitter<TabServiceEvents> {
           const oldWindow = existingTab.getWindow();
           // Capture placeholder for old window before moving the view away
           await sendPlaceholderForTab(existingTab, oldWindow);
+          // Re-check after async: tab or window may have been destroyed
+          if (existingTab.isDestroyed || window.destroyed) return true;
           existingTab.setWindow(window);
           node.setActiveLayout(targetLayout);
         }
@@ -1136,9 +1141,16 @@ export class TabService extends TypedEventEmitter<TabServiceEvents> {
       const oldLayout = this.getLayout(windowId, oldSpaceId);
       if (oldLayout) {
         oldLayout.setVisible(false);
-        // Hide all visible tabs in old layout
-        const oldTabs = this.getTabsInWindowSpace(windowId, oldSpaceId);
-        for (const tab of oldTabs) {
+        // Hide all visible tabs in old layout.
+        // Include active node tabs (pinned tabs may have a different spaceId).
+        const tabsToHide = new Set(this.getTabsInWindowSpace(windowId, oldSpaceId));
+        const oldActiveNode = oldLayout.getActiveNode();
+        if (oldActiveNode) {
+          for (const tab of oldActiveNode.tabs) {
+            tabsToHide.add(tab);
+          }
+        }
+        for (const tab of tabsToHide) {
           if (tab.visible) {
             tab.lastActiveAt = Math.floor(Date.now() / 1000);
             if (tab.fullScreen) {
@@ -1149,8 +1161,7 @@ export class TabService extends TypedEventEmitter<TabServiceEvents> {
 
             // Auto-PiP for hidden tabs with playing video
             if (tab.layer) {
-              const anyTabInPiP = Array.from(this.tabs.values()).some((t) => t.id !== tab.id && t.isPictureInPicture);
-              if (!anyTabInPiP && !this.isTabVisibleInAnotherWindow(tab)) {
+              if (this._pipCount === 0 && !this.isTabVisibleInAnotherWindow(tab)) {
                 tab.enterPictureInPicture();
               }
             }
@@ -1247,7 +1258,8 @@ export class TabService extends TypedEventEmitter<TabServiceEvents> {
       if (props.includes("isPictureInPicture")) {
         this._pipCount += tab.isPictureInPicture ? 1 : -1;
       }
-      // Update webContents index when tab wakes up (new webContents created)
+      // Update webContents index when tab wakes up (new webContents created).
+      // Old keys are GC'd automatically since webContentsIndex is a WeakMap.
       if (props.includes("asleep") && !tab.asleep && tab.webContents) {
         this.webContentsIndex.set(tab.webContents, tab);
       }
@@ -1587,15 +1599,16 @@ export class TabService extends TypedEventEmitter<TabServiceEvents> {
 
       const sourceSpaceId = tab.spaceId;
       const sourceWindowId = tab.getWindow().id;
+      const leavingSourceLayout = sourceSpaceId !== spaceId || sourceWindowId !== window.id;
 
-      // Hide if leaving the current space
-      if (tab.visible) {
+      // Hide only if actually leaving the current window-space
+      if (leavingSourceLayout && tab.visible) {
         tab.visible = false;
         tab.layer?.setVisible(false);
       }
 
       // Remove from source layout node
-      if (sourceSpaceId !== spaceId || sourceWindowId !== window.id) {
+      if (leavingSourceLayout) {
         const sourceLayout = this.getLayout(sourceWindowId, sourceSpaceId);
         if (sourceLayout) {
           const node = sourceLayout.getNodeForTab(tab.id);

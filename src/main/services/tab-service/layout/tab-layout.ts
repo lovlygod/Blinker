@@ -123,11 +123,7 @@ export class TabLayout extends TypedEventEmitter<TabLayoutEvents> {
    * Get all layout nodes, sorted by position.
    */
   public getAllNodesSorted(): TabLayoutNode[] {
-    const nodes = this.getNodes();
-    for (const node of nodes) {
-      node.invalidatePosition();
-    }
-    return nodes.sort((a, b) => a.position - b.position);
+    return this.getNodes().sort((a, b) => a.position - b.position);
   }
 
   /**

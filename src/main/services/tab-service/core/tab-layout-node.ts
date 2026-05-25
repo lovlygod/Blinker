@@ -37,8 +37,6 @@ export class TabLayoutNode extends TypedEventEmitter<TabLayoutNodeEvents> {
   private _tabIdSet: Set<number> = new Set();
   private _frontTab: Tab | null = null;
   private _destroyListeners: Map<number, () => void> = new Map();
-  private _cachedPosition: number = 0;
-  private _positionDirty: boolean = true;
 
   /**
    * All layouts this node is registered in.
@@ -82,15 +80,7 @@ export class TabLayoutNode extends TypedEventEmitter<TabLayoutNodeEvents> {
 
   public get position(): number {
     if (this._tabs.length === 0) return 0;
-    if (this._positionDirty) {
-      this._cachedPosition = Math.min(...this._tabs.map((t) => t.position));
-      this._positionDirty = false;
-    }
-    return this._cachedPosition;
-  }
-
-  public invalidatePosition(): void {
-    this._positionDirty = true;
+    return Math.min(...this._tabs.map((t) => t.position));
   }
 
   public get tabCount(): number {
@@ -165,7 +155,6 @@ export class TabLayoutNode extends TypedEventEmitter<TabLayoutNodeEvents> {
 
     this._tabs.push(tab);
     this._tabIdSet.add(tab.id);
-    this._positionDirty = true;
 
     // Set front tab for single-tab nodes
     if (this._tabs.length === 1) {
@@ -205,7 +194,6 @@ export class TabLayoutNode extends TypedEventEmitter<TabLayoutNodeEvents> {
 
     this._tabs.splice(index, 1);
     this._tabIdSet.delete(tab.id);
-    this._positionDirty = true;
 
     // Update front tab if needed
     if (this._frontTab?.id === tab.id) {

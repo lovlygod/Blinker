@@ -454,6 +454,15 @@ export class TabIPC {
       }
     }
 
+    // Also include spaces from existing layouts for this window.
+    // Pinned tabs may be propagated into layouts whose spaceId differs from
+    // tab.spaceId, so tab-derived spaces alone can miss them.
+    for (const layout of this.tabService.layouts.values()) {
+      if (layout.windowId === windowId) {
+        spaces.add(layout.spaceId);
+      }
+    }
+
     // Collect layout nodes from relevant layouts
     const layoutNodes: TabLayoutNodeData[] = [];
 

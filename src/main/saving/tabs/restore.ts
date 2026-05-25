@@ -85,28 +85,31 @@ async function createTabsFromPersistedData(tabDatas: PersistedTabData[]): Promis
     const window = await browserWindowsController.create(windowType, windowOptions);
 
     tabService.beginBatch();
-    for (const tabData of tabs) {
-      // Skip tabs whose profile couldn't be loaded (e.g. deleted profile)
-      if (!loadedProfilesController.get(tabData.profileId)) {
-        tabPersistenceService.removeTab(tabData.uniqueId);
-        continue;
+    try {
+      for (const tabData of tabs) {
+        // Skip tabs whose profile couldn't be loaded (e.g. deleted profile)
+        if (!loadedProfilesController.get(tabData.profileId)) {
+          tabPersistenceService.removeTab(tabData.uniqueId);
+          continue;
+        }
+
+        const tab = tabService.createTabInternal(window.id, tabData.profileId, tabData.spaceId, undefined, {
+          asleep: true,
+          createdAt: tabData.createdAt,
+          lastActiveAt: tabData.lastActiveAt,
+          position: tabData.position,
+          navHistory: tabData.navHistory,
+          navHistoryIndex: tabData.navHistoryIndex,
+          uniqueId: tabData.uniqueId,
+          title: tabData.title,
+          faviconURL: tabData.faviconURL || undefined
+        });
+
+        uniqueIdToTabId.set(tabData.uniqueId, tab.id);
       }
-
-      const tab = tabService.createTabInternal(window.id, tabData.profileId, tabData.spaceId, undefined, {
-        asleep: true,
-        createdAt: tabData.createdAt,
-        lastActiveAt: tabData.lastActiveAt,
-        position: tabData.position,
-        navHistory: tabData.navHistory,
-        navHistoryIndex: tabData.navHistoryIndex,
-        uniqueId: tabData.uniqueId,
-        title: tabData.title,
-        faviconURL: tabData.faviconURL || undefined
-      });
-
-      uniqueIdToTabId.set(tabData.uniqueId, tab.id);
+    } finally {
+      tabService.endBatch();
     }
-    tabService.endBatch();
   }
 
   restoreLayoutNodes(persistedNodes, uniqueIdToTabId);

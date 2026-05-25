@@ -519,8 +519,9 @@ export class TabService extends TypedEventEmitter<TabServiceEvents> {
 
     this.pinnedTabs.set(pinnedTab.uniqueId, pinnedTab);
 
-    // Mark the tab as owned by this pinned tab
+    // Mark the tab as owned by this pinned tab (ephemeral — remove stale DB record)
     tab.owner = { kind: "pinned", pinnedTabId: pinnedTab.uniqueId };
+    this.emitContentChange(tab.getWindow().id, tab.id);
 
     // Associate the tab
     pinnedTab.associate(tab.spaceId, tab.id);
@@ -542,12 +543,15 @@ export class TabService extends TypedEventEmitter<TabServiceEvents> {
     if (!pinnedTab) return [];
 
     const associatedTabIds: number[] = [];
+    const affectedWindowIds = new Set<number>();
     for (const tabId of pinnedTab.associations.values()) {
       associatedTabIds.push(tabId);
       // Make associated tabs normal again
       const tab = this.tabs.get(tabId);
       if (tab) {
         tab.owner = { kind: "normal" };
+        affectedWindowIds.add(tab.getWindow().id);
+        this.emitContentChange(tab.getWindow().id, tab.id);
       }
     }
 
@@ -556,6 +560,9 @@ export class TabService extends TypedEventEmitter<TabServiceEvents> {
     pinnedTab.destroy();
 
     this.emit("pinned-tab-changed");
+    for (const windowId of affectedWindowIds) {
+      this.emitStructuralChange(windowId);
+    }
     return associatedTabIds;
   }
 
@@ -647,6 +654,7 @@ export class TabService extends TypedEventEmitter<TabServiceEvents> {
       if (tab) {
         tab.owner = { kind: "normal" };
         affectedWindowIds.add(tab.getWindow().id);
+        this.emitContentChange(tab.getWindow().id, tab.id);
       }
     }
 

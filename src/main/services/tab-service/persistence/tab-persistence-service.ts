@@ -94,7 +94,9 @@ export class TabPersistenceService {
 
   private onTabChanged(tab: Tab): void {
     if (tab.owner.kind !== "normal") {
-      // Ephemeral tabs (pinned/bookmark-owned) are not persisted
+      // Ephemeral tabs (pinned/bookmark-owned) are not persisted.
+      // Remove any stale DB record from when this tab was still "normal".
+      this.markRemoved(tab.uniqueId);
       return;
     }
     const serialized = this.serializeTab(tab);

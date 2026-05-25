@@ -777,6 +777,12 @@ export class TabService extends TypedEventEmitter<TabServiceEvents> {
     const windowId = tab.getWindow().id;
     const layout = this.layouts.get(windowId);
 
+    // Hide the tab before moving (it's leaving the source space)
+    if (tab.visible) {
+      tab.visible = false;
+      tab.layer?.setVisible(false);
+    }
+
     // Move the layout node to the new space (this also updates tab.spaceId)
     if (layout) {
       const node = layout.getNodeForTab(tab.id);
@@ -795,6 +801,15 @@ export class TabService extends TypedEventEmitter<TabServiceEvents> {
       }
     } else {
       tab.setSpace(spaceId);
+    }
+
+    // Clear focused tab references to this tab in the source space across ALL layouts.
+    // This prevents STAW from thinking any window still "wants" this tab in the old space.
+    for (const [, otherLayout] of this.layouts) {
+      const focused = otherLayout.getFocusedTab(sourceSpaceId);
+      if (focused?.id === tab.id) {
+        otherLayout.removeFocusedTab(sourceSpaceId);
+      }
     }
 
     if (newPosition !== undefined) {
@@ -954,23 +969,21 @@ export class TabService extends TypedEventEmitter<TabServiceEvents> {
       }
     }
 
-    // Relocate pinned tabs that were focused in this space but moved away.
-    // This makes pinned tabs follow the user across space switches.
-    const layout = this.layouts.get(windowId);
-    if (layout) {
-      const focused = layout.getFocusedTab(spaceId);
-      if (focused && !focused.isDestroyed && focused.spaceId !== spaceId && focused.owner.kind === "pinned") {
-        // The focused tab for this space is a pinned tab now in another space — bring it back
-        const pinnedTab = this.pinnedTabs.get(focused.owner.pinnedTabId);
-        if (pinnedTab) {
-          pinnedTab.dissociate(focused.spaceId);
-          pinnedTab.associate(spaceId, focused.id);
-        }
-        this.moveTabToSpace(focused.id, spaceId);
-        // moveTabToSpace calls activateTab internally
-        return;
-      }
+    // Relocate pinned tabs whose live tab is in another space.
+    // Pinned tabs sync across spaces — one live tab that follows the user.
+    for (const pinnedTab of this.pinnedTabs.values()) {
+      const liveTab = this.findAssociatedTab(pinnedTab);
+      if (!liveTab || liveTab.isDestroyed) continue;
+      if (liveTab.spaceId === spaceId) continue; // already in target space
+      if (liveTab.getWindow().id !== windowId) continue; // belongs to another window
+      // Move the pinned tab's live tab to the new space
+      const oldSpaceForTab = liveTab.spaceId;
+      pinnedTab.dissociate(oldSpaceForTab);
+      pinnedTab.associate(spaceId, liveTab.id);
+      this.moveTabToSpace(liveTab.id, spaceId);
     }
+
+    const layout = this.layouts.get(windowId);
 
     // If no active node is set yet (e.g. tabs were restored asleep), activate
     // the focused tab or the most recently active one.

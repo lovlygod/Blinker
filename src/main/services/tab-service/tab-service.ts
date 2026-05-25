@@ -421,9 +421,8 @@ export class TabService extends TypedEventEmitter<TabServiceEvents> {
     const layout = this.layouts.get(windowId);
     if (!layout) return;
     const node = layout.activateNextNode(spaceId);
-    if (node) {
-      this.handlePageBoundsChanged(windowId);
-      this.emitStructuralChange(windowId);
+    if (node?.frontTab) {
+      this.activateTab(node.frontTab);
     }
   }
 
@@ -434,9 +433,8 @@ export class TabService extends TypedEventEmitter<TabServiceEvents> {
     const layout = this.layouts.get(windowId);
     if (!layout) return;
     const node = layout.activatePreviousNode(spaceId);
-    if (node) {
-      this.handlePageBoundsChanged(windowId);
-      this.emitStructuralChange(windowId);
+    if (node?.frontTab) {
+      this.activateTab(node.frontTab);
     }
   }
 

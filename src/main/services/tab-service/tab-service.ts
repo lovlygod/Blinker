@@ -1678,11 +1678,11 @@ export class TabService extends TypedEventEmitter<TabServiceEvents> {
   // --- Context Menus ---
 
   public showContextMenu(tabId: number, window: BrowserWindow): void {
-    showTabContextMenu(this, tabId, window);
+    void showTabContextMenu(this, tabId, window);
   }
 
   public showPinnedTabContextMenu(pinnedTabId: string, window: BrowserWindow): void {
-    showPinnedTabContextMenu(this, pinnedTabId, window);
+    void showPinnedTabContextMenu(this, pinnedTabId, window);
   }
 
   // --- Serialization ---

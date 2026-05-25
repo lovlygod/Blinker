@@ -1,21 +1,45 @@
 import { clipboard, Menu, MenuItem } from "electron";
 import { BrowserWindow } from "@/controllers/windows-controller/types";
+import { spacesController } from "@/controllers/spaces-controller";
 import type { TabService } from "../tab-service";
+import type { Tab } from "./tab";
 
 /**
- * Shows the context menu for a regular tab in the sidebar.
+ * Builds a "Move To" submenu listing all spaces for the tab's profile.
  */
-export function showTabContextMenu(tabService: TabService, tabId: number, window: BrowserWindow): void {
+async function buildMoveToSubmenu(tabService: TabService, tab: Tab): Promise<MenuItem> {
+  const spaces = await spacesController.getAllFromProfile(tab.profileId);
+  const currentSpaceId = tab.spaceId;
+
+  const submenu = new Menu();
+  for (const space of spaces) {
+    submenu.append(
+      new MenuItem({
+        label: space.name,
+        enabled: space.id !== currentSpaceId,
+        click: () => {
+          tabService.moveTabToSpace(tab.id, space.id);
+        }
+      })
+    );
+  }
+
+  return new MenuItem({ label: "Move To", submenu });
+}
+
+/**
+ * Shows the context menu for a tab in the sidebar (works for both normal and pinned-tab-owned tabs).
+ */
+export async function showTabContextMenu(tabService: TabService, tabId: number, window: BrowserWindow): Promise<void> {
   const tab = tabService.tabs.get(tabId);
   if (!tab) return;
 
-  const isTabVisible = tab.visible;
+  const isPinned = tab.owner.kind === "pinned";
   const hasURL = !!tab.url;
 
   const contextMenu = new Menu();
 
-  const isPinned = tab.owner.kind === "pinned";
-
+  // --- Copy URL ---
   contextMenu.append(
     new MenuItem({
       label: "Copy URL",
@@ -26,8 +50,87 @@ export function showTabContextMenu(tabService: TabService, tabId: number, window
     })
   );
 
+  // --- Reset URL to Default (pinned tabs only) ---
+  if (tab.owner.kind === "pinned") {
+    const pinnedTab = tabService.pinnedTabs.get(tab.owner.pinnedTabId);
+    const isOnDifferentUrl = pinnedTab && tab.url !== pinnedTab.defaultUrl;
+
+    contextMenu.append(
+      new MenuItem({
+        label: "Reset URL to Default",
+        enabled: !!isOnDifferentUrl,
+        click: () => {
+          if (pinnedTab && !tab.isDestroyed) {
+            tab.loadURL(pinnedTab.defaultUrl);
+          }
+        }
+      })
+    );
+  }
+
   contextMenu.append(new MenuItem({ type: "separator" }));
 
+  // --- Mute ---
+  const isMuted = tab.muted;
+  contextMenu.append(
+    new MenuItem({
+      label: isMuted ? "Unmute Tab" : "Mute Tab",
+      enabled: !!tab.webContents && !tab.webContents.isDestroyed(),
+      click: () => {
+        if (tab.webContents && !tab.webContents.isDestroyed()) {
+          tab.webContents.setAudioMuted(!isMuted);
+        }
+      }
+    })
+  );
+
+  // --- Duplicate ---
+  contextMenu.append(
+    new MenuItem({
+      label: "Duplicate Tab",
+      enabled: hasURL,
+      click: () => {
+        if (tab.url) {
+          void tabService.createTab(window.id, tab.profileId, tab.spaceId, undefined, { url: tab.url });
+        }
+      }
+    })
+  );
+
+  // --- Move To ---
+  const moveToItem = await buildMoveToSubmenu(tabService, tab);
+  contextMenu.append(moveToItem);
+
+  contextMenu.append(new MenuItem({ type: "separator" }));
+
+  // --- Close Tab ---
+  contextMenu.append(
+    new MenuItem({
+      label: "Close Tab",
+      click: () => {
+        tab.destroy();
+      }
+    })
+  );
+
+  // --- Close Tabs Below ---
+  const tabsInSpace = tabService.getTabsInWindowSpace(window.id, tab.spaceId);
+  const tabsBelow = tabsInSpace.filter((t) => t.position > tab.position && t.id !== tab.id);
+  contextMenu.append(
+    new MenuItem({
+      label: "Close Tabs Below",
+      enabled: tabsBelow.length > 0,
+      click: () => {
+        for (const t of tabsBelow) {
+          t.destroy();
+        }
+      }
+    })
+  );
+
+  contextMenu.append(new MenuItem({ type: "separator" }));
+
+  // --- Pin / Unpin ---
   contextMenu.append(
     new MenuItem({
       label: isPinned ? "Unpin Tab" : "Pin Tab",
@@ -42,33 +145,7 @@ export function showTabContextMenu(tabService: TabService, tabId: number, window
     })
   );
 
-  contextMenu.append(new MenuItem({ type: "separator" }));
-
-  contextMenu.append(
-    new MenuItem({
-      label: isTabVisible ? "Cannot put active tab to sleep" : tab.asleep ? "Wake Tab" : "Put Tab to Sleep",
-      enabled: !isTabVisible,
-      click: () => {
-        if (tab.asleep) {
-          tabService.activateTab(tab);
-        } else {
-          tab.putToSleep();
-        }
-      }
-    })
-  );
-
-  contextMenu.append(
-    new MenuItem({
-      label: "Close Tab",
-      click: () => {
-        tab.destroy();
-      }
-    })
-  );
-
-  contextMenu.append(new MenuItem({ type: "separator" }));
-
+  // --- Reopen Closed Tab ---
   const mostRecent = tabService.recentlyClosed.peekMostRecent();
   const mostRecentTitle = mostRecent?.tabData.title;
   const truncatedTitle =
@@ -94,47 +171,44 @@ export function showTabContextMenu(tabService: TabService, tabId: number, window
 }
 
 /**
- * Shows the context menu for a pinned tab.
+ * Shows the context menu for a pinned tab in the pin grid.
+ * Delegates to the unified tab context menu if the tab has an associated tab,
+ * otherwise shows a minimal menu.
  */
-export function showPinnedTabContextMenu(tabService: TabService, pinnedTabId: string, window: BrowserWindow): void {
+export async function showPinnedTabContextMenu(
+  tabService: TabService,
+  pinnedTabId: string,
+  window: BrowserWindow
+): Promise<void> {
   const pinnedTab = tabService.pinnedTabs.get(pinnedTabId);
   if (!pinnedTab) return;
 
-  const contextMenu = new Menu();
-
-  contextMenu.append(
-    new MenuItem({
-      label: "Unpin",
-      click: () => {
-        tabService.unpinToTabList(pinnedTabId);
-      }
-    })
-  );
-
-  contextMenu.append(new MenuItem({ type: "separator" }));
-
+  // If there's an associated tab for the current space, use the unified menu
   const currentSpaceId = window.currentSpaceId;
   const associatedTabId = currentSpaceId ? pinnedTab.getAssociatedTabId(currentSpaceId) : null;
-  const associatedTab = associatedTabId !== null ? tabService.tabs.get(associatedTabId) : undefined;
-  const isOnDifferentUrl = associatedTab && associatedTab.url !== pinnedTab.defaultUrl;
+  if (associatedTabId !== null) {
+    return showTabContextMenu(tabService, associatedTabId, window);
+  }
 
-  contextMenu.append(
-    new MenuItem({
-      label: "Reset to Default",
-      enabled: !!isOnDifferentUrl,
-      click: () => {
-        if (associatedTab && !associatedTab.isDestroyed) {
-          associatedTab.loadURL(pinnedTab.defaultUrl);
-        }
-      }
-    })
-  );
+  // Minimal menu for pinned tabs with no associated tab (not yet activated)
+  const contextMenu = new Menu();
 
   contextMenu.append(
     new MenuItem({
       label: "Copy URL",
       click: () => {
         clipboard.writeText(pinnedTab.defaultUrl);
+      }
+    })
+  );
+
+  contextMenu.append(new MenuItem({ type: "separator" }));
+
+  contextMenu.append(
+    new MenuItem({
+      label: "Unpin Tab",
+      click: () => {
+        tabService.unpinToTabList(pinnedTabId);
       }
     })
   );

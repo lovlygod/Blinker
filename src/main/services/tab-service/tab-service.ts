@@ -1087,83 +1087,10 @@ export class TabService extends TypedEventEmitter<TabServiceEvents> {
   }
 
   public handlePageBoundsChanged(windowId: number): void {
-    const window = browserWindowsController.getWindowById(windowId);
-    if (!window) return;
-
-    const pageBounds = window.pageBounds;
-    const tabsInWindow = this.getTabsInWindow(windowId);
-
-    for (const tab of tabsInWindow) {
-      if (!tab.visible || !tab.view) continue;
-
-      let bounds: Electron.Rectangle;
-      if (tab.fullScreen) {
-        const [contentWidth, contentHeight] = window.browserWindow.getContentSize();
-        bounds = { x: 0, y: 0, width: contentWidth, height: contentHeight };
-      } else {
-        bounds = pageBounds;
-      }
-
-      // For layout nodes with multiple tabs (glance/split), compute sub-bounds
-      const layout = this.getLayout(windowId, tab.spaceId);
-      const activeNode = layout?.getActiveNode();
-      if (activeNode && activeNode.tabs.length > 1) {
-        const tabIndex = activeNode.tabs.indexOf(tab);
-        if (tabIndex >= 0) {
-          bounds = this.computeNodeTabBounds(bounds, activeNode, tabIndex);
-
-          // Update z-index for glance mode (front tab = "tab", back tab = "tabBack")
-          if (activeNode.mode === "glance") {
-            const isFront = activeNode.frontTab === tab;
-            tab.setLayerType(isFront ? "tab" : "tabBack");
-          }
-        }
-      } else {
-        // Single-tab node: ensure layer type is "tab" (reset from previous glance)
-        tab.setLayerType("tab");
-      }
-
-      tab.view.setBounds(bounds);
-      const borderRadius = tab.fullScreen ? 0 : 6;
-      tab.view.setBorderRadius(borderRadius);
+    // Delegate bounds calculation to each layout (which delegates to its active node)
+    for (const layout of this.getLayoutsForWindow(windowId)) {
+      layout.applyBounds();
     }
-  }
-
-  private computeNodeTabBounds(
-    pageBounds: Electron.Rectangle,
-    node: TabLayoutNode,
-    tabIndex: number
-  ): Electron.Rectangle {
-    const count = node.tabs.length;
-    if (count <= 1) return pageBounds;
-
-    if (node.mode === "split") {
-      // Horizontal split
-      const tabWidth = Math.floor(pageBounds.width / count);
-      return {
-        x: pageBounds.x + tabIndex * tabWidth,
-        y: pageBounds.y,
-        width: tabIndex === count - 1 ? pageBounds.width - tabIndex * tabWidth : tabWidth,
-        height: pageBounds.height
-      };
-    }
-
-    // Glance mode: front tab at 85% centered, back tab at 95% centered
-    const isFront = node.frontTab === node.tabs[tabIndex];
-    const widthPct = isFront ? 0.85 : 0.95;
-    const heightPct = isFront ? 1 : 0.975;
-
-    const newWidth = Math.floor(pageBounds.width * widthPct);
-    const newHeight = Math.floor(pageBounds.height * heightPct);
-    const xOffset = Math.floor((pageBounds.width - newWidth) / 2);
-    const yOffset = Math.floor((pageBounds.height - newHeight) / 2);
-
-    return {
-      x: pageBounds.x + xOffset,
-      y: pageBounds.y + yOffset,
-      width: newWidth,
-      height: newHeight
-    };
   }
 
   // --- Event Helpers ---

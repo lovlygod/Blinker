@@ -1,4 +1,5 @@
 import { TypedEventEmitter } from "@/modules/typed-event-emitter";
+import { browserWindowsController } from "@/controllers/windows-controller/interfaces/browser";
 import { Tab } from "../core/tab";
 import { TabLayoutNode } from "../core/tab-layout-node";
 import { TabPositioner } from "./tab-positioner";
@@ -295,5 +296,49 @@ export class TabLayout extends TypedEventEmitter<TabLayoutEvents> {
   private removeFromHistory(nodeId: string): void {
     const idx = this.activationHistory.indexOf(nodeId);
     if (idx > -1) this.activationHistory.splice(idx, 1);
+  }
+
+  // --- Bounds Calculation (main) ---
+
+  /**
+   * Compute the main bounds for this layout (the page content area).
+   * This is the window's page bounds, or fullscreen content size if applicable.
+   */
+  public computeMainBounds(): Electron.Rectangle | null {
+    const window = browserWindowsController.getWindowById(this.windowId);
+    if (!window) return null;
+    return window.pageBounds;
+  }
+
+  /**
+   * Apply bounds to all visible tabs in the active node.
+   * TabLayout computes main bounds, then delegates to TabLayoutNode.computeBounds()
+   * for per-tab sub-bounds (split/glance).
+   */
+  public applyBounds(): void {
+    const activeNode = this.activeNode;
+    if (!activeNode) return;
+
+    const window = browserWindowsController.getWindowById(this.windowId);
+    if (!window) return;
+
+    const mainBounds = window.pageBounds;
+
+    const tabBoundsMap = activeNode.computeBounds(mainBounds);
+    for (const [tab, { bounds, layerType }] of tabBoundsMap) {
+      if (!tab.visible || !tab.view) continue;
+
+      let finalBounds: Electron.Rectangle;
+      if (tab.fullScreen) {
+        const [contentWidth, contentHeight] = window.browserWindow.getContentSize();
+        finalBounds = { x: 0, y: 0, width: contentWidth, height: contentHeight };
+      } else {
+        finalBounds = bounds;
+      }
+
+      tab.setLayerType(layerType);
+      tab.view.setBounds(finalBounds);
+      tab.view.setBorderRadius(tab.fullScreen ? 0 : 6);
+    }
   }
 }

@@ -1,6 +1,7 @@
 import { TypedEventEmitter } from "@/modules/typed-event-emitter";
 import { Tab } from "./tab";
 import { TabLayoutNodeMode } from "~/types/tab-service";
+import type { LayerType } from "~/layers";
 
 /**
  * TabLayoutNode — represents tabs displayed together in a window.
@@ -191,6 +192,57 @@ export class TabLayoutNode extends TypedEventEmitter<TabLayoutNodeEvents> {
 
     this.windowId = windowId;
     this.emit("changed");
+  }
+
+  // --- Bounds Calculation (secondary) ---
+
+  /**
+   * Compute bounds for each tab in this node given the main bounds from TabLayout.
+   * For single-tab nodes, returns the main bounds directly.
+   * For multi-tab nodes (split/glance), divides the space accordingly.
+   */
+  public computeBounds(mainBounds: Electron.Rectangle): Map<Tab, { bounds: Electron.Rectangle; layerType: LayerType }> {
+    const result = new Map<Tab, { bounds: Electron.Rectangle; layerType: LayerType }>();
+
+    if (this._tabs.length <= 1) {
+      // Single tab: passthrough
+      if (this._tabs[0]) {
+        result.set(this._tabs[0], { bounds: mainBounds, layerType: "tab" });
+      }
+      return result;
+    }
+
+    if (this.mode === "split") {
+      const count = this._tabs.length;
+      const tabWidth = Math.floor(mainBounds.width / count);
+      for (let i = 0; i < count; i++) {
+        const width = i === count - 1 ? mainBounds.width - i * tabWidth : tabWidth;
+        result.set(this._tabs[i], {
+          bounds: { x: mainBounds.x + i * tabWidth, y: mainBounds.y, width, height: mainBounds.height },
+          layerType: "tab"
+        });
+      }
+      return result;
+    }
+
+    // Glance mode: front tab at 85% centered, back tabs at 95% centered
+    for (let i = 0; i < this._tabs.length; i++) {
+      const tab = this._tabs[i];
+      const isFront = this._frontTab === tab;
+      const widthPct = isFront ? 0.85 : 0.95;
+      const heightPct = isFront ? 1 : 0.975;
+
+      const newWidth = Math.floor(mainBounds.width * widthPct);
+      const newHeight = Math.floor(mainBounds.height * heightPct);
+      const xOffset = Math.floor((mainBounds.width - newWidth) / 2);
+      const yOffset = Math.floor((mainBounds.height - newHeight) / 2);
+
+      result.set(tab, {
+        bounds: { x: mainBounds.x + xOffset, y: mainBounds.y + yOffset, width: newWidth, height: newHeight },
+        layerType: isFront ? "tab" : "tabBack"
+      });
+    }
+    return result;
   }
 
   // --- Lifecycle ---

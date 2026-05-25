@@ -93,6 +93,8 @@ export async function showTabContextMenu(tabService: TabService, tabId: number, 
           void tabService.createTab(window.id, tab.profileId, targetSpaceId, undefined, {
             url: tab.url,
             position: tab.position + 0.5
+          }).then(() => {
+            tabService.normalizePositions(window.id, targetSpaceId);
           });
         }
       }

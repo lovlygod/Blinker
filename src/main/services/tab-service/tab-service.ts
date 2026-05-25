@@ -862,6 +862,13 @@ export class TabService extends TypedEventEmitter<TabServiceEvents> {
   }
 
   /**
+   * Normalize tab positions in a window-space (assigns sequential integers).
+   */
+  public normalizePositions(windowId: number, spaceId: string): void {
+    this.positioner.normalizePositions(this.getTabsInWindowSpace(windowId, spaceId));
+  }
+
+  /**
    * Move a tab to a different space.
    */
   public moveTabToSpace(tabId: number, spaceId: string, newPosition?: number): void {

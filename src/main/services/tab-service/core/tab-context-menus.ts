@@ -77,9 +77,7 @@ export async function showTabContextMenu(tabService: TabService, tabId: number, 
       label: isMuted ? "Unmute Tab" : "Mute Tab",
       enabled: !!tab.webContents && !tab.webContents.isDestroyed(),
       click: () => {
-        if (tab.webContents && !tab.webContents.isDestroyed()) {
-          tab.webContents.setAudioMuted(!isMuted);
-        }
+        tabService.setTabMuted(tab.id, !isMuted);
       }
     })
   );

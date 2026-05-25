@@ -304,7 +304,7 @@ export function relocateTabsFromClosingWindow(closingWindow: BrowserWindow, tabs
     if (targetSpaceId) {
       const focusedTab = tabService.getFocusedTab(targetWindow.id, targetSpaceId);
       if (focusedTab) {
-        tabService.activateTab(focusedTab);
+        tabService.wakeAndActivateTab(focusedTab);
       }
     }
   }
@@ -350,7 +350,7 @@ export function initTabSync(): void {
     // If the tab is already in this window, just activate
     if (focusedTab.getWindow().id === window.id) {
       clearPlaceholderInRenderer(window.id);
-      tabService.activateTab(focusedTab);
+      tabService.wakeAndActivateTab(focusedTab);
       return;
     }
 
@@ -365,7 +365,7 @@ export function initTabSync(): void {
 
       if (focusedTab.isDestroyed || window.destroyed) return;
 
-      tabService.activateTab(focusedTab);
+      tabService.wakeAndActivateTab(focusedTab);
     }).catch((err) => {
       console.error("[tab-sync] Failed to move active tab on focus:", err);
     });
@@ -398,7 +398,7 @@ export function initTabSync(): void {
         await moveTabToWindowIfNeeded(wantedTab, otherWin);
 
         if (!wantedTab.isDestroyed && !otherWin.destroyed) {
-          tabService.activateTab(wantedTab);
+          tabService.wakeAndActivateTab(wantedTab);
         }
       }).catch((err) => {
         console.error("[tab-sync] Failed to release synced tab:", err);
@@ -427,7 +427,7 @@ export function initTabSync(): void {
 
           const focusedTab = tabService.getFocusedTab(window.id, expectedSpaceId);
           if (focusedTab) {
-            tabService.activateTab(focusedTab);
+            tabService.wakeAndActivateTab(focusedTab);
           }
         }).catch((err) => {
           console.error("[tab-sync] Failed to move active tab on space change:", err);

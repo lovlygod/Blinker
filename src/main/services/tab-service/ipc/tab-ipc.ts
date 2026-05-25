@@ -197,7 +197,7 @@ export class TabIPC {
         }
       }
 
-      this.tabService.activateTab(tab);
+      this.tabService.wakeAndActivateTab(tab);
       return true;
     });
 

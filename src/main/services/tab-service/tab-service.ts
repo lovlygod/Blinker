@@ -288,8 +288,8 @@ export class TabService extends TypedEventEmitter<TabServiceEvents> {
     // Wire up tab events
     this.wireTabEvents(tab);
 
-    // Activate the new tab unless explicitly suppressed
-    if (options.makeActive !== false) {
+    // Activate the new tab unless explicitly suppressed or created asleep
+    if (options.makeActive !== false && !tab.asleep) {
       this.activateTab(tab);
     }
 
@@ -395,7 +395,12 @@ export class TabService extends TypedEventEmitter<TabServiceEvents> {
   /**
    * Activate a tab by finding its layout node and making it active.
    */
+  private _activatingTabIds = new Set<number>();
+
   public activateTab(tab: Tab): void {
+    // Guard against re-entry (extensions.addTab can fire selectTab → activateTab)
+    if (this._activatingTabIds.has(tab.id)) return;
+
     const windowId = tab.getWindow().id;
     const layout = this.layouts.get(windowId);
     if (!layout) return;
@@ -403,38 +408,49 @@ export class TabService extends TypedEventEmitter<TabServiceEvents> {
     const node = layout.getNodeForTab(tab.id);
     if (!node) return;
 
-    // Wake sleeping tabs before activation so the view exists
+    this._activatingTabIds.add(tab.id);
+    try {
+      // For multi-tab nodes (glance), set front tab
+      if (node.mode === "glance") {
+        node.setFrontTab(tab);
+      }
+
+      layout.setActiveNode(tab.spaceId, node);
+      layout.setFocusedTab(tab.spaceId, tab);
+
+      // Mark as recently active (prevents premature archive/sleep)
+      tab.lastActiveAt = Math.floor(Date.now() / 1000);
+
+      // Update view visibility and bounds
+      this.updateTabVisibility(windowId, tab.spaceId);
+      this.handlePageBoundsChanged(windowId);
+
+      // Focus the tab's layer through the LayerManager — but only if the
+      // window is currently focused. Calling webContents.focus() on a
+      // background window would steal OS focus (same issue reallocateFocus
+      // defers to avoid). When the window later gains focus, the deferred
+      // reallocateFocus handles it.
+      const window = browserWindowsController.getWindowById(windowId);
+      if (tab.layer && window && !window.destroyed && window.browserWindow.isFocused()) {
+        tab.layer.focus();
+      }
+
+      // Notify renderer of active tab change
+      this.emitStructuralChange(windowId);
+    } finally {
+      this._activatingTabIds.delete(tab.id);
+    }
+  }
+
+  /**
+   * Wake a sleeping tab and activate it. Use this for explicit user interactions
+   * (clicking a tab in the sidebar, switch-to-tab IPC, etc).
+   */
+  public wakeAndActivateTab(tab: Tab): void {
     if (tab.asleep) {
       tab.wakeUp();
     }
-
-    // For multi-tab nodes (glance), set front tab
-    if (node.mode === "glance") {
-      node.setFrontTab(tab);
-    }
-
-    layout.setActiveNode(tab.spaceId, node);
-    layout.setFocusedTab(tab.spaceId, tab);
-
-    // Mark as recently active (prevents premature archive/sleep)
-    tab.lastActiveAt = Math.floor(Date.now() / 1000);
-
-    // Update view visibility and bounds
-    this.updateTabVisibility(windowId, tab.spaceId);
-    this.handlePageBoundsChanged(windowId);
-
-    // Focus the tab's layer through the LayerManager — but only if the
-    // window is currently focused. Calling webContents.focus() on a
-    // background window would steal OS focus (same issue reallocateFocus
-    // defers to avoid). When the window later gains focus, the deferred
-    // reallocateFocus handles it.
-    const window = browserWindowsController.getWindowById(windowId);
-    if (tab.layer && window && !window.destroyed && window.browserWindow.isFocused()) {
-      tab.layer.focus();
-    }
-
-    // Notify renderer of active tab change
-    this.emitStructuralChange(windowId);
+    this.activateTab(tab);
   }
 
   /**
@@ -555,7 +571,7 @@ export class TabService extends TypedEventEmitter<TabServiceEvents> {
 
     // Activate the first tab
     if (tabs.length > 0) {
-      this.activateTab(tabs[0]);
+      this.wakeAndActivateTab(tabs[0]);
     }
   }
 
@@ -638,7 +654,7 @@ export class TabService extends TypedEventEmitter<TabServiceEvents> {
             tab.setWindow(window);
           }
         }
-        this.activateTab(tab);
+        this.wakeAndActivateTab(tab);
         return true;
       }
       // Stale association — clear it
@@ -680,7 +696,7 @@ export class TabService extends TypedEventEmitter<TabServiceEvents> {
             tab.setWindow(window);
           }
         }
-        this.activateTab(tab);
+        this.wakeAndActivateTab(tab);
         return true;
       }
     }
@@ -802,7 +818,7 @@ export class TabService extends TypedEventEmitter<TabServiceEvents> {
       this.positioner.normalizePositions(this.getTabsInWindowSpace(windowId, sourceSpaceId));
     }
 
-    this.activateTab(tab);
+    this.wakeAndActivateTab(tab);
   }
 
   /**
@@ -1128,7 +1144,7 @@ export class TabService extends TypedEventEmitter<TabServiceEvents> {
       .sort((a, b) => b.lastActiveAt - a.lastActiveAt);
     const bestTab = spaceTabs[0] ?? tabsInWindow.sort((a, b) => b.lastActiveAt - a.lastActiveAt)[0];
     if (bestTab) {
-      this.activateTab(bestTab);
+      this.wakeAndActivateTab(bestTab);
     }
   }
 
@@ -1325,8 +1341,7 @@ export class TabService extends TypedEventEmitter<TabServiceEvents> {
         enabled: !isTabVisible,
         click: () => {
           if (tab.asleep) {
-            tab.wakeUp();
-            this.activateTab(tab);
+            this.wakeAndActivateTab(tab);
           } else {
             tab.putToSleep();
           }

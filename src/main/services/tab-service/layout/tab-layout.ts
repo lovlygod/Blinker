@@ -217,20 +217,28 @@ export class TabLayout extends TypedEventEmitter<TabLayoutEvents> {
     return this.activateAdjacentNode(spaceId, -1);
   }
 
-  private activateAdjacentNode(spaceId: string, delta: 1 | -1): TabLayoutNode | undefined {
+  /**
+   * Get the next/previous node without activating it.
+   */
+  public getAdjacentNode(spaceId: string, delta: 1 | -1): TabLayoutNode | undefined {
     const sorted = this.getAllNodesSorted(spaceId);
-    if (sorted.length <= 1) return sorted[0];
+    if (sorted.length === 0) return undefined;
+    if (sorted.length === 1) return sorted[0];
 
     const active = this.getActiveNode(spaceId);
-    if (!active) {
-      this.setActiveNode(spaceId, sorted[0]);
-      return sorted[0];
-    }
+    if (!active) return sorted[0];
 
     const idx = sorted.findIndex((n) => n.id === active.id);
     const nextIdx = (idx + delta + sorted.length) % sorted.length;
-    this.setActiveNode(spaceId, sorted[nextIdx]);
     return sorted[nextIdx];
+  }
+
+  private activateAdjacentNode(spaceId: string, delta: 1 | -1): TabLayoutNode | undefined {
+    const node = this.getAdjacentNode(spaceId, delta);
+    if (node) {
+      this.setActiveNode(spaceId, node);
+    }
+    return node;
   }
 
   /**

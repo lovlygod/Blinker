@@ -420,7 +420,7 @@ export class TabService extends TypedEventEmitter<TabServiceEvents> {
   public activateNextTab(windowId: number, spaceId: string): void {
     const layout = this.layouts.get(windowId);
     if (!layout) return;
-    const node = layout.activateNextNode(spaceId);
+    const node = layout.getAdjacentNode(spaceId, 1);
     if (node?.frontTab) {
       this.activateTab(node.frontTab);
     }
@@ -432,7 +432,7 @@ export class TabService extends TypedEventEmitter<TabServiceEvents> {
   public activatePreviousTab(windowId: number, spaceId: string): void {
     const layout = this.layouts.get(windowId);
     if (!layout) return;
-    const node = layout.activatePreviousNode(spaceId);
+    const node = layout.getAdjacentNode(spaceId, -1);
     if (node?.frontTab) {
       this.activateTab(node.frontTab);
     }

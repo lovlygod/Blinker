@@ -1369,14 +1369,20 @@ export class TabService extends TypedEventEmitter<TabServiceEvents> {
       }
 
       // Determine if tab was active. The once("destroyed") listener from
-      // TabLayoutNode.addTab may have already removed the tab from its node
-      // (and auto-destroyed the node), so also check if the active node is
-      // destroyed — that means this tab was its last occupant.
+      // TabLayoutNode.addTab fires before this handler (registered earlier),
+      // so it may have already removed the tab → emptied the node →
+      // auto-destroyed the node → layout set activeNode = null.
+      // If activeNode is null, it means the active node was just destroyed
+      // (the only path that nulls activeNode during a tab destroy), so the
+      // tab was active.
       let wasActive = false;
       if (currentLayout) {
         const activeNode = currentLayout.getActiveNode();
         if (activeNode) {
-          wasActive = activeNode.hasTab(tab.id) || activeNode.isDestroyed;
+          wasActive = activeNode.hasTab(tab.id);
+        } else {
+          // Active node was just destroyed — this tab was its last occupant
+          wasActive = true;
         }
       }
 

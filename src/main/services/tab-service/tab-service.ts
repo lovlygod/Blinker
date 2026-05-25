@@ -23,6 +23,7 @@ import { WebContents } from "electron";
 import { quitController } from "@/controllers/quit-controller";
 import { setWindowSpace } from "@/ipc/session/spaces";
 import { FLAGS } from "@/modules/flags";
+import { isTabShownAcrossSpaces } from "./tab-sync";
 
 export const NEW_TAB_URL = "flow://new-tab";
 
@@ -604,12 +605,9 @@ export class TabService extends TypedEventEmitter<TabServiceEvents> {
 
       // Move to target space if needed
       if (existingTab.spaceId !== spaceId) {
-        const oldSpaceId = existingTab.spaceId;
-        pinnedTab.dissociate(oldSpaceId);
         this.moveTabToSpace(existingTab.id, spaceId);
         pinnedTab.associate(spaceId, existingTab.id);
         this.reorderPinnedTabsInSpace(window.id, spaceId);
-        return true;
       }
 
       this.activateTab(existingTab);
@@ -666,12 +664,9 @@ export class TabService extends TypedEventEmitter<TabServiceEvents> {
       }
       // Move to target space if needed
       if (existingTab.spaceId !== spaceId) {
-        const oldSpaceId = existingTab.spaceId;
-        pinnedTab.dissociate(oldSpaceId);
         this.moveTabToSpace(existingTab.id, spaceId);
         pinnedTab.associate(spaceId, existingTab.id);
         this.reorderPinnedTabsInSpace(window.id, spaceId);
-        return true;
       }
       this.activateTab(existingTab);
       return true;
@@ -979,8 +974,32 @@ export class TabService extends TypedEventEmitter<TabServiceEvents> {
       }
     }
 
-    // Pinned tabs are NOT auto-relocated on space switch. They only move
-    // when the user explicitly activates them (via clickPinnedTab).
+    // Relocate pinned tabs that were previously activated in the target space.
+    // Tabs with isTabShownAcrossSpaces persist their presence across spaces —
+    // once activated in a space, switching back auto-brings them.
+    const targetSpaceData = spacesController.getFromCache(spaceId);
+    for (const pinnedTab of this.pinnedTabs.values()) {
+      if (targetSpaceData && pinnedTab.profileId !== targetSpaceData.profileId) continue;
+      if (!pinnedTab.getAssociatedTabId(spaceId)) continue;
+
+      const liveTab = this.findAssociatedTab(pinnedTab);
+      if (!liveTab || liveTab.isDestroyed) continue;
+      if (!isTabShownAcrossSpaces(liveTab)) continue;
+      if (liveTab.spaceId === spaceId && liveTab.getWindow().id === windowId) continue;
+
+      // Move to this window if needed
+      if (liveTab.getWindow().id !== windowId) {
+        this.migrateTabBetweenLayouts(liveTab, windowId);
+        liveTab.setWindow(window);
+      }
+
+      // Move to the target space
+      if (liveTab.spaceId !== spaceId) {
+        this.moveTabToSpace(liveTab.id, spaceId);
+      }
+    }
+
+    this.reorderPinnedTabsInSpace(windowId, spaceId);
 
     const layout = this.layouts.get(windowId);
 

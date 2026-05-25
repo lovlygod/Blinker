@@ -169,6 +169,15 @@ export function isTabSynced(tab: Tab): boolean {
   return tab.owner.kind === "pinned" || isTabSyncEnabled();
 }
 
+/**
+ * Whether a tab is shown across spaces — i.e. once activated in a space,
+ * it remains "present" there and auto-shows when the user returns.
+ * Currently applies to pinned-tab-owned tabs; extensible for future types.
+ */
+export function isTabShownAcrossSpaces(tab: Tab): boolean {
+  return tab.owner.kind === "pinned";
+}
+
 function shouldSyncSharedActiveTab(window: BrowserWindow, spaceId: string): boolean {
   if (isTabSyncEnabled()) return true;
   const focusedTab = tabService.getFocusedTab(window.id, spaceId);

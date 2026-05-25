@@ -153,12 +153,20 @@ export function isSyncExcludedTab(tab: Tab): boolean {
   return isInternalProfileTab(tab) || isPopupWindowTab(tab);
 }
 
+/**
+ * Whether a tab participates in cross-window sync.
+ * Pinned-tab-owned tabs always sync; others sync when the global setting is
+ * enabled and the tab isn't excluded (internal profile or popup window).
+ */
+export function isTabSynced(tab: Tab): boolean {
+  if (isSyncExcludedTab(tab)) return false;
+  return tab.owner.kind === "pinned" || isTabSyncEnabled();
+}
+
 function shouldSyncSharedActiveTab(window: BrowserWindow, spaceId: string): boolean {
   if (isTabSyncEnabled()) return true;
-
-  // Pinned tabs always sync across windows
   const focusedTab = tabService.getFocusedTab(window.id, spaceId);
-  return !!focusedTab && focusedTab.owner.kind === "pinned";
+  return !!focusedTab && isTabSynced(focusedTab);
 }
 
 // --- Tab Moving ---
@@ -267,15 +275,12 @@ export function relocateTabsFromClosingWindow(closingWindow: BrowserWindow, tabs
     .filter((w) => w.id !== closingWindowId && w.browserWindowType === "normal");
   if (survivingWindows.length === 0) return null;
 
-  const syncEnabled = isTabSyncEnabled();
   const defaultTargetWindow = survivingWindows[0];
   const relocatable = new Map<BrowserWindow, Tab[]>();
   const unrelocatable: Tab[] = [];
 
   for (const tab of tabs) {
-    // Pinned-tab-owned tabs always relocate; others only when sync is enabled
-    const shouldRelocate = tab.owner.kind === "pinned" || syncEnabled;
-    if (!shouldRelocate) {
+    if (!isTabSynced(tab)) {
       unrelocatable.push(tab);
       continue;
     }

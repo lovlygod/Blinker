@@ -15,7 +15,7 @@ import {
 import { Tab } from "../core/tab";
 import { TabLayoutNode } from "../core/tab-layout-node";
 import { PinnedTab } from "../core/pinned-tab";
-import { isTabSyncEnabled, isSyncExcludedTab } from "../tab-sync";
+import { isTabSyncEnabled, isSyncExcludedTab, isTabSynced } from "../tab-sync";
 
 const DEBOUNCE_MS = 80;
 
@@ -97,13 +97,7 @@ export class TabIPC {
     let targetWindowIds: number[];
     const tab = this.tabService.getTabById(tabId);
 
-    const shouldBroadcast = (() => {
-      if (isTabSyncEnabled()) {
-        return !(tab && isSyncExcludedTab(tab));
-      }
-      // Pinned-tab-owned tabs always broadcast (they are always-sync)
-      return tab?.owner.kind === "pinned";
-    })();
+    const shouldBroadcast = tab ? isTabSynced(tab) : false;
 
     if (shouldBroadcast) {
       targetWindowIds = browserWindowsController

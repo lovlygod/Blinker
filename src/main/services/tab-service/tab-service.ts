@@ -1346,6 +1346,11 @@ export class TabService extends TypedEventEmitter<TabServiceEvents> {
       this.removeFromIndex(this.windowIndex, tab.getWindow().id, tab);
       this.removeFromIndex(this.spaceIndex, tab.spaceId, tab);
 
+      // Decrement PiP counter if the tab was in PiP when destroyed
+      if (tab.isPictureInPicture) {
+        this._pipCount--;
+      }
+
       if (quitController.isQuitting) {
         this.tabs.delete(tab.id);
         return;

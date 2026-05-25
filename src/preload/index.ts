@@ -714,6 +714,7 @@ const flowAPI: typeof flow = {
   findInPage: wrapAPI(findInPageAPI, "browser"),
   prompts: wrapAPI(promptsAPI, "browser"),
   tabService: wrapAPI(createTabServicePreloadAPI(ipcRenderer, listenOnIPCChannel), "browser", {
+    newTab: "app",
     disablePictureInPicture: "all"
   }),
 

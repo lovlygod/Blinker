@@ -833,7 +833,6 @@ export class Tab extends TypedEventEmitter<TabEvents> {
         };
       }
 
-      this.emit("new-tab-requested", url, "default", undefined, details, {});
       return { action: "allow" };
     });
 

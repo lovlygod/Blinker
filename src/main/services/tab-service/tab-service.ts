@@ -248,6 +248,9 @@ export class TabService extends TypedEventEmitter<TabServiceEvents> {
     this.emit("tab-created", tab);
     this.emitStructuralChange(windowId);
 
+    // Notify extensions that indices changed for all tabs in the same window+profile
+    this.notifyIndexChanges(windowId, profileId);
+
     return tab;
   }
 
@@ -973,6 +976,9 @@ export class TabService extends TypedEventEmitter<TabServiceEvents> {
     this.positioner.normalizePositions(this.getTabsInWindowSpace(windowId, spaceId));
     this.positioner.normalizePositions(this.getTabsInWindowSpace(windowId, sourceSpaceId));
 
+    // Notify extensions that indices shifted (tab moved between spaces)
+    this.notifyIndexChanges(windowId, tab.profileId);
+
     // Notify renderer that source space changed (tab removed)
     this.emitStructuralChange(windowId);
   }
@@ -1276,6 +1282,16 @@ export class TabService extends TypedEventEmitter<TabServiceEvents> {
   }
 
   /**
+   * Notify all tabs in a window+profile that their index may have changed.
+   * Called after structural changes (tab create/destroy/move/reorder).
+   */
+  private notifyIndexChanges(windowId: number, profileId: string): void {
+    for (const tab of this.getTabsInWindowProfile(windowId, profileId)) {
+      tab.notifyExtensionsOfChanges();
+    }
+  }
+
+  /**
    * Suppress emissions during batch operations. Call endBatch() when done
    * to flush a single structural change for each affected window.
    */
@@ -1308,6 +1324,8 @@ export class TabService extends TypedEventEmitter<TabServiceEvents> {
       if (props.includes("asleep") && !tab.asleep && tab.webContents) {
         this.webContentsIndex.set(tab.webContents, tab);
       }
+      // Notify extension system of tab state changes (title, url, muted, etc.)
+      tab.notifyExtensionsOfChanges();
       this.emitContentChange(tab.getWindow().id, tab.id);
     });
 
@@ -1336,7 +1354,10 @@ export class TabService extends TypedEventEmitter<TabServiceEvents> {
       this.emitStructuralChange(tab.getWindow().id);
       if (oldWindowId !== tab.getWindow().id) {
         this.emitStructuralChange(oldWindowId);
+        // Index shifted in both old and new window
+        this.notifyIndexChanges(oldWindowId, tab.profileId);
       }
+      this.notifyIndexChanges(tab.getWindow().id, tab.profileId);
       // Re-serialize so persistence picks up the new windowGroupId
       this.emitContentChange(tab.getWindow().id, tab.id);
     });
@@ -1445,6 +1466,9 @@ export class TabService extends TypedEventEmitter<TabServiceEvents> {
       }
 
       this.emitStructuralChange(windowId);
+
+      // Notify extensions that indices shifted for remaining tabs in same profile
+      this.notifyIndexChanges(windowId, tab.profileId);
 
       // Auto-close empty popup windows
       this.reconcilePopupWindow(windowId);
@@ -1689,6 +1713,17 @@ export class TabService extends TypedEventEmitter<TabServiceEvents> {
       this.emitStructuralChange(windowId);
     }
     this.emitStructuralChange(window.id);
+
+    // Notify extensions of index changes for all moved tabs' profiles
+    const profileIds = new Set<string>();
+    for (const tabId of tabIds) {
+      const tab = this.tabs.get(tabId);
+      if (tab) profileIds.add(tab.profileId);
+    }
+    for (const profileId of profileIds) {
+      this.notifyIndexChanges(window.id, profileId);
+    }
+
     return true;
   }
 

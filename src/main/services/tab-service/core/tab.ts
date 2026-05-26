@@ -319,6 +319,13 @@ export class Tab extends TypedEventEmitter<TabEvents> {
     this.layer.setVisible(wasVisible);
   }
 
+  public notifyExtensionsOfChanges(): void {
+    if (!this.webContents || this.webContents.isDestroyed()) return;
+
+    // electron-chrome-extensions listens to this event to update its internal state
+    this.webContents.emit("tab-updated");
+  }
+
   // --- Space Management ---
 
   public setSpace(spaceId: string): void {

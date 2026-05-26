@@ -306,6 +306,49 @@ export class TabService extends TypedEventEmitter<TabServiceEvents> {
     return result;
   }
 
+  public getTabsInWindowProfile(windowId: number, profileId: string): Tab[] {
+    const layouts = this.getLayoutsForWindow(windowId)
+      .filter((layout) => spacesController.getFromCache(layout.spaceId)?.profileId === profileId)
+      .sort((a, b) => {
+        const spaceA = spacesController.getFromCache(a.spaceId);
+        const spaceB = spacesController.getFromCache(b.spaceId);
+        const orderA = spaceA?.order ?? Number.MAX_SAFE_INTEGER;
+        const orderB = spaceB?.order ?? Number.MAX_SAFE_INTEGER;
+
+        if (orderA !== orderB) return orderA - orderB;
+        return a.spaceId.localeCompare(b.spaceId);
+      });
+
+    const result: Tab[] = [];
+    const seenTabIds = new Set<number>();
+
+    for (const layout of layouts) {
+      for (const node of layout.getAllNodesSorted()) {
+        for (const tab of node.tabs) {
+          if (tab.profileId !== profileId) continue;
+          if (tab.getWindow().id !== windowId) continue;
+          if (seenTabIds.has(tab.id)) continue;
+
+          seenTabIds.add(tab.id);
+          result.push(tab);
+        }
+      }
+    }
+
+    const remainingTabs = this.getTabsInWindow(windowId)
+      .filter((tab) => tab.profileId === profileId && !seenTabIds.has(tab.id))
+      .sort((a, b) => a.createdAt - b.createdAt);
+
+    result.push(...remainingTabs);
+    return result;
+  }
+
+  public getTabIndexInWindowProfile(tab: Tab): number {
+    return this.getTabsInWindowProfile(tab.getWindow().id, tab.profileId).findIndex(
+      (candidate) => candidate.id === tab.id
+    );
+  }
+
   public clearBrowsingHistoryDedupingForProfile(profileId: string, url?: string): void {
     for (const tab of this.getTabsInProfile(profileId)) {
       tab.clearBrowsingHistoryDeduping(url);

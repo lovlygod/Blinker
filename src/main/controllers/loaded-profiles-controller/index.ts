@@ -134,6 +134,8 @@ class LoadedProfilesController extends TypedEventEmitter<LoadedProfilesControlle
         tabDetails.favIconUrl = tab.faviconURL ?? undefined;
         tabDetails.discarded = tab.asleep;
         tabDetails.autoDiscardable = false;
+
+        tabDetails.index = tabService.getTabIndexInWindowProfile(tab);
       },
 
       // Tabs

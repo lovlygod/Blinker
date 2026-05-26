@@ -145,10 +145,8 @@ class LoadedProfilesController extends TypedEventEmitter<LoadedProfilesControlle
 
         const targetWindow = window || browserWindowsController.getWindows()[0];
         if (!targetWindow) throw new Error("No window available");
-        const spaceId = targetWindow.currentSpaceId;
-        if (!spaceId) throw new Error("No space available");
 
-        const tab = tabService.createTabInternal(targetWindow.id, profileId, spaceId, undefined, {
+        const tab = await tabService.createTab(targetWindow.id, profileId, undefined, undefined, {
           url: tabDetails.url
         });
         if (tabDetails.active) {

@@ -177,6 +177,11 @@ export class TabService extends TypedEventEmitter<TabServiceEvents> {
     // Load profile
     await loadedProfilesController.load(profileId);
 
+    const window = browserWindowsController.getWindowById(windowId);
+    if (window && !window.currentSpaceId) {
+      window.setCurrentSpace(spaceId!);
+    }
+
     return this.createTabInternal(windowId, profileId, spaceId!, webContentsViewOptions, options);
   }
 
@@ -1513,6 +1518,7 @@ export class TabService extends TypedEventEmitter<TabServiceEvents> {
         ...(parsedFeatures.top ? { y: +parsedFeatures.top } : {})
       });
       windowId = popupWindow.id;
+      popupWindow.setCurrentSpace(sourceTab.spaceId);
     }
 
     const insertPosition = disposition !== "new-window" ? sourceTab.position + 0.5 : undefined;

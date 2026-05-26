@@ -205,16 +205,10 @@ class LoadedProfilesController extends TypedEventEmitter<LoadedProfilesControlle
 
           let tabIndex = 0;
           for (const url of urls) {
-            const currentTabIndex = tabIndex;
-
-            const windowSpaceId = window.currentSpaceId;
-            if (windowSpaceId) {
-              const tab = tabService.createTabInternal(window.id, profileId, windowSpaceId, undefined, { url });
-              if (currentTabIndex === 0) {
-                tabService.activateTab(tab);
-              }
+            const tab = await tabService.createTab(window.id, profileId, undefined, undefined, { url });
+            if (tabIndex === 0) {
+              tabService.activateTab(tab);
             }
-
             tabIndex++;
           }
         }

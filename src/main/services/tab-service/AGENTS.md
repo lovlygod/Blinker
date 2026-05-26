@@ -95,6 +95,7 @@ Tab property changes → Tab emits "updated" → wireTabEvents handler →
 3. Subsequent clicks: activates existing associated tab.
 4. Cross-window click: captures placeholder in old window, calls `tab.setWindow()` (no layout migration).
 5. `pinnedTab.layoutNode` stores direct reference to the shared node.
+6. Pinning an existing live tab must immediately set `pinnedTab.layoutNode` and propagate that node to all same-profile layouts.
 
 ## Common Pitfalls
 
@@ -111,6 +112,10 @@ Tab property changes → Tab emits "updated" → wireTabEvents handler →
 6. **Node destruction cascades** — Destroying a `TabLayoutNode` removes it from ALL member layouts. For pinned tabs, never destroy the shared node on cross-window moves — just change `activeLayout`.
 
 7. **Lifecycle setting values** — `tab-lifecycle-timer.ts` must use `ArchiveTabValueMap` / `SleepTabValueMap` from `basic-settings`, not parse setting IDs as durations. Those maps are the canonical behavior contract for archive/sleep thresholds.
+
+8. **Hidden layout visibility** — `updateTabVisibility` must not reveal tabs for hidden layouts. Hidden layouts may still update active/focused metadata, but visible layers are only changed after their space becomes current.
+
+9. **Renderer-initiated new tabs** — For `window.open()` and web context-menu actions, derive the target space from the tab's current window at action time. Pinned/STAW tabs may be rendered in a different window/space than `tab.spaceId`.
 
 ## File Overview
 

@@ -125,6 +125,7 @@ const SidebarTab = memo(
     const handleContextMenu = useCallback(
       (e: React.MouseEvent) => {
         e.preventDefault();
+        if (!tab.id) return;
         flow.tabService.showContextMenu(tab.id);
       },
       [tab.id]

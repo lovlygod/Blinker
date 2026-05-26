@@ -612,6 +612,13 @@ export class TabService extends TypedEventEmitter<TabServiceEvents> {
     // Associate the tab
     pinnedTab.associate(tab.spaceId, tab.id);
 
+    const layout = this.getLayout(tab.getWindow().id, tab.spaceId);
+    const node = layout?.getNodeForTab(tab.id);
+    if (node) {
+      pinnedTab.layoutNode = node;
+      this.propagatePinnedTabNode(node, pinnedTab.profileId);
+    }
+
     this.wirePinnedTabEvents(pinnedTab);
     this.normalizePinnedTabPositions(tab.profileId);
     this.pinnedTabDb.save(pinnedTab);
@@ -1025,11 +1032,14 @@ export class TabService extends TypedEventEmitter<TabServiceEvents> {
       }
 
       // Forward events
-      layout.on("active-changed", (wId, sId) => {
-        this.updateTabVisibility(wId, sId);
+      const newLayout = layout;
+      newLayout.on("active-changed", (wId, sId) => {
+        if (newLayout.visible) {
+          this.updateTabVisibility(wId, sId);
+        }
         this.emit("active-changed", wId, sId);
       });
-      layout.on("focused-tab-changed", (wId, sId) => {
+      newLayout.on("focused-tab-changed", (wId, sId) => {
         this.emit("focused-tab-changed", wId, sId);
       });
 
@@ -1102,6 +1112,7 @@ export class TabService extends TypedEventEmitter<TabServiceEvents> {
   private updateTabVisibility(windowId: number, spaceId: string): void {
     const layout = this.getLayout(windowId, spaceId);
     if (!layout) return;
+    if (!layout.visible) return;
 
     const activeNode = layout.getActiveNode();
 
@@ -1504,7 +1515,9 @@ export class TabService extends TypedEventEmitter<TabServiceEvents> {
     handlerDetails: Electron.HandlerDetails | undefined,
     options: { noLoadURL?: boolean }
   ): void {
-    let windowId = sourceTab.getWindow().id;
+    let targetWindow = sourceTab.getWindow();
+    let windowId = targetWindow.id;
+    let targetSpaceId = targetWindow.currentSpaceId ?? sourceTab.spaceId;
 
     if (disposition === "new-window") {
       const parsedFeatures: Record<string, string | number> = {};
@@ -1523,14 +1536,17 @@ export class TabService extends TypedEventEmitter<TabServiceEvents> {
         ...(parsedFeatures.left ? { x: +parsedFeatures.left } : {}),
         ...(parsedFeatures.top ? { y: +parsedFeatures.top } : {})
       });
+      popupWindow.setCurrentSpace(targetSpaceId);
+      targetWindow = popupWindow;
       windowId = popupWindow.id;
-      popupWindow.setCurrentSpace(sourceTab.spaceId);
+    } else {
+      targetSpaceId = targetWindow.currentSpaceId ?? sourceTab.spaceId;
     }
 
     const insertPosition = disposition !== "new-window" ? sourceTab.position + 0.5 : undefined;
 
     const isBackground = disposition === "background-tab";
-    const newTab = this.createTabInternal(windowId, sourceTab.profileId, sourceTab.spaceId, undefined, {
+    const newTab = this.createTabInternal(windowId, sourceTab.profileId, targetSpaceId, undefined, {
       url,
       noLoadURL: options.noLoadURL,
       webContentsViewOptions: constructorOptions,
@@ -1539,7 +1555,7 @@ export class TabService extends TypedEventEmitter<TabServiceEvents> {
     });
 
     if (insertPosition !== undefined) {
-      this.positioner.normalizePositions(this.getTabsInWindowSpace(sourceTab.getWindow().id, sourceTab.spaceId));
+      this.positioner.normalizePositions(this.getTabsInWindowSpace(targetWindow.id, targetSpaceId));
     }
 
     sourceTab._lastCreatedWebContents = newTab.webContents;

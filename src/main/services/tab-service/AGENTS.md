@@ -110,6 +110,8 @@ Tab property changes → Tab emits "updated" → wireTabEvents handler →
 
 6. **Node destruction cascades** — Destroying a `TabLayoutNode` removes it from ALL member layouts. For pinned tabs, never destroy the shared node on cross-window moves — just change `activeLayout`.
 
+7. **Lifecycle setting values** — `tab-lifecycle-timer.ts` must use `ArchiveTabValueMap` / `SleepTabValueMap` from `basic-settings`, not parse setting IDs as durations. Those maps are the canonical behavior contract for archive/sleep thresholds.
+
 ## File Overview
 
 ```

@@ -1,26 +1,7 @@
 import { Tab } from "./core/tab";
 import { quitController } from "@/controllers/quit-controller";
 import { getSettingValueById } from "@/saving/settings";
-import { SleepTabValueMap } from "@/modules/basic-settings";
-
-/**
- * Parses a duration string like "30m", "1h", "12h", "1d" into seconds.
- */
-function parseDurationToSeconds(value: string): number {
-  const match = value.match(/^(\d+)(m|h|d)$/);
-  if (!match) return 0;
-  const num = parseInt(match[1], 10);
-  switch (match[2]) {
-    case "m":
-      return num * 60;
-    case "h":
-      return num * 60 * 60;
-    case "d":
-      return num * 24 * 60 * 60;
-    default:
-      return 0;
-  }
-}
+import { ArchiveTabValueMap, SleepTabValueMap } from "@/modules/basic-settings";
 
 /**
  * Periodically checks inactive tabs and:
@@ -44,13 +25,11 @@ export function startTabLifecycleTimer(tabs: Map<number, Tab>): void {
     // Read settings once per tick (not per tab)
     const archiveAfter = getSettingValueById("archiveTabAfter");
     const archiveSec =
-      typeof archiveAfter === "string" && archiveAfter !== "never" ? parseDurationToSeconds(archiveAfter) : 0;
+      typeof archiveAfter === "string" ? (ArchiveTabValueMap[archiveAfter as keyof typeof ArchiveTabValueMap] ?? 0) : 0;
 
     const sleepAfter = getSettingValueById("sleepTabAfter");
     const sleepSec =
-      typeof sleepAfter === "string" && sleepAfter !== "never"
-        ? (SleepTabValueMap[sleepAfter as keyof typeof SleepTabValueMap] ?? 0)
-        : 0;
+      typeof sleepAfter === "string" ? (SleepTabValueMap[sleepAfter as keyof typeof SleepTabValueMap] ?? 0) : 0;
 
     for (const tab of tabs.values()) {
       if (tab.owner.kind !== "normal") continue;

@@ -707,6 +707,12 @@ export class TabService extends TypedEventEmitter<TabServiceEvents> {
       owner: { kind: "pinned", pinnedTabId: pinnedTab.uniqueId }
     });
 
+    // Re-check after async: window or tab may have been destroyed during profile load.
+    if (tab.isDestroyed || window.destroyed) {
+      if (!tab.isDestroyed) tab.destroy();
+      return true;
+    }
+
     pinnedTab.associate(spaceId, tab.id);
 
     // Propagate pinned tab node to all layouts in the same profile

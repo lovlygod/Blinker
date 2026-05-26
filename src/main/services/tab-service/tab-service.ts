@@ -310,44 +310,9 @@ export class TabService extends TypedEventEmitter<TabServiceEvents> {
   }
 
   public getTabsInWindowProfile(windowId: number, profileId: string): Tab[] {
-    // Gather tabs from all layouts for this window+profile, ordered by:
-    // 1. Space order (lower space order first)
-    // 2. Tab position within each space
-    const layouts = this.getLayoutsForWindow(windowId)
-      .filter((layout) => spacesController.getFromCache(layout.spaceId)?.profileId === profileId)
-      .sort((a, b) => {
-        const spaceA = spacesController.getFromCache(a.spaceId);
-        const spaceB = spacesController.getFromCache(b.spaceId);
-        const orderA = spaceA?.order ?? Number.MAX_SAFE_INTEGER;
-        const orderB = spaceB?.order ?? Number.MAX_SAFE_INTEGER;
-
-        if (orderA !== orderB) return orderA - orderB;
-        return a.spaceId.localeCompare(b.spaceId);
-      });
-
-    const result: Tab[] = [];
-    const seenTabIds = new Set<number>();
-
-    for (const layout of layouts) {
-      // Get tabs in this space sorted by position (primary sort for extension index)
-      const tabsInSpace = this.getTabsInWindowSpace(windowId, layout.spaceId)
-        .filter((tab) => tab.profileId === profileId)
-        .sort((a, b) => a.position - b.position);
-
-      for (const tab of tabsInSpace) {
-        if (seenTabIds.has(tab.id)) continue;
-        seenTabIds.add(tab.id);
-        result.push(tab);
-      }
-    }
-
-    // Fallback: any tabs in this window+profile not in a layout (shouldn't happen normally)
-    const remainingTabs = this.getTabsInWindow(windowId)
-      .filter((tab) => tab.profileId === profileId && !seenTabIds.has(tab.id))
+    return this.getTabsInWindow(windowId)
+      .filter((tab) => tab.profileId === profileId)
       .sort((a, b) => a.position - b.position);
-
-    result.push(...remainingTabs);
-    return result;
   }
 
   public getTabIndexInWindowProfile(tab: Tab): number {
@@ -916,6 +881,9 @@ export class TabService extends TypedEventEmitter<TabServiceEvents> {
 
     tab.updateStateProperty("position", newPosition);
     this.positioner.normalizePositions(this.getTabsInWindowSpace(tab.getWindow().id, tab.spaceId));
+
+    // Notify extensions that indices shifted after reorder
+    this.notifyIndexChanges(tab.getWindow().id, tab.profileId);
   }
 
   /**

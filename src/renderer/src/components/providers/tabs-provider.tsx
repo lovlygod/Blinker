@@ -3,7 +3,8 @@ import { transformUrlToDisplayURL } from "@/lib/url";
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import type { TabData, TabLayoutNodeData, WindowTabsPayload } from "~/types/tab-service";
 
-export type TabGroup = {
+/** Enriched layout node for sidebar rendering (tabs resolved from payload). */
+export type TabLayoutNodeView = {
   id: string;
   mode: string;
   profileId: string;
@@ -16,22 +17,22 @@ export type TabGroup = {
   focusedTab: TabData | null;
 };
 
-type TabGroupCacheEntry = {
+type TabLayoutNodeCacheEntry = {
   source: TabLayoutNodeData | null;
   tabs: TabData[];
   active: boolean;
   focusedTab: TabData | null;
-  value: TabGroup;
+  value: TabLayoutNodeView;
 };
 
 interface TabsContextValue {
-  tabGroups: TabGroup[];
-  getTabGroups: (spaceId: string) => TabGroup[];
-  getActiveTabGroup: (spaceId: string) => TabGroup | null;
+  layoutNodes: TabLayoutNodeView[];
+  getLayoutNodes: (spaceId: string) => TabLayoutNodeView[];
+  getActiveLayoutNode: (spaceId: string) => TabLayoutNodeView | null;
   getFocusedTab: (spaceId: string) => TabData | null;
 
   // Current Space //
-  activeTabGroup: TabGroup | null;
+  activeLayoutNode: TabLayoutNodeView | null;
   focusedTab: TabData | null;
   addressUrl: string;
 
@@ -42,9 +43,9 @@ interface TabsContextValue {
 }
 
 const TabsContext = createContext<TabsContextValue | null>(null);
-const TabsGroupsContext = createContext<Pick<
+const TabsLayoutNodesContext = createContext<Pick<
   TabsContextValue,
-  "tabGroups" | "getTabGroups" | "getActiveTabGroup" | "getFocusedTab" | "activeTabGroup"
+  "layoutNodes" | "getLayoutNodes" | "getActiveLayoutNode" | "getFocusedTab" | "activeLayoutNode"
 > | null>(null);
 const TabsFocusedContext = createContext<Pick<TabsContextValue, "focusedTab" | "addressUrl"> | null>(null);
 const TabsFocusedIdContext = createContext<number | null | undefined>(undefined);
@@ -59,10 +60,10 @@ export const useTabs = () => {
   return context;
 };
 
-export const useTabsGroups = () => {
-  const context = useContext(TabsGroupsContext);
+export const useTabLayoutNodes = () => {
+  const context = useContext(TabsLayoutNodesContext);
   if (!context) {
-    throw new Error("useTabsGroups must be used within a TabsProvider");
+    throw new Error("useTabLayoutNodes must be used within a TabsProvider");
   }
   return context;
 };
@@ -111,8 +112,8 @@ interface TabsProviderProps {
   children: React.ReactNode;
 }
 
-const EMPTY_TAB_GROUPS: TabGroup[] = [];
-const EMPTY_TAB_GROUP_CACHE = new Map<string, TabGroupCacheEntry>();
+const EMPTY_LAYOUT_NODES: TabLayoutNodeView[] = [];
+const EMPTY_LAYOUT_NODE_CACHE = new Map<string, TabLayoutNodeCacheEntry>();
 
 function areSameTabRefs(a: TabData[], b: TabData[]): boolean {
   if (a.length !== b.length) return false;
@@ -125,7 +126,7 @@ function areSameTabRefs(a: TabData[], b: TabData[]): boolean {
 export const TabsProvider = ({ children }: TabsProviderProps) => {
   const { currentSpace } = useSpaces();
   const [tabsData, setTabsData] = useState<WindowTabsPayload | null>(null);
-  const tabGroupCacheRef = useRef<Map<string, TabGroupCacheEntry>>(EMPTY_TAB_GROUP_CACHE);
+  const layoutNodeCacheRef = useRef<Map<string, TabLayoutNodeCacheEntry>>(EMPTY_LAYOUT_NODE_CACHE);
 
   const fetchTabs = useCallback(async () => {
     if (!flow) return;
@@ -205,21 +206,21 @@ export const TabsProvider = ({ children }: TabsProviderProps) => {
     [tabsData]
   );
 
-  const { tabGroups, tabGroupsBySpaceId, activeTabGroupBySpaceId, focusedTabBySpaceId, nextTabGroupCache } =
+  const { layoutNodes, layoutNodesBySpaceId, activeLayoutNodeBySpaceId, focusedTabBySpaceId, nextLayoutNodeCache } =
     useMemo(() => {
-      const tabGroupsBySpaceId = new Map<string, TabGroup[]>();
-      const activeTabGroupBySpaceId = new Map<string, TabGroup | null>();
+      const layoutNodesBySpaceId = new Map<string, TabLayoutNodeView[]>();
+      const activeLayoutNodeBySpaceId = new Map<string, TabLayoutNodeView | null>();
       const focusedTabBySpaceId = new Map<string, TabData | null>();
-      const nextTabGroupCache = new Map<string, TabGroupCacheEntry>();
-      const previousTabGroupCache = tabGroupCacheRef.current;
+      const nextLayoutNodeCache = new Map<string, TabLayoutNodeCacheEntry>();
+      const previousLayoutNodeCache = layoutNodeCacheRef.current;
 
       if (!tabsData) {
         return {
-          tabGroups: EMPTY_TAB_GROUPS,
-          tabGroupsBySpaceId,
-          activeTabGroupBySpaceId,
+          layoutNodes: EMPTY_LAYOUT_NODES,
+          layoutNodesBySpaceId,
+          activeLayoutNodeBySpaceId,
           focusedTabBySpaceId,
-          nextTabGroupCache
+          nextLayoutNodeCache
         };
       }
 
@@ -246,8 +247,8 @@ export const TabsProvider = ({ children }: TabsProviderProps) => {
         }
       }
 
-      // Build tab groups from layout nodes (multi-tab: glance/split)
-      interface InternalGroupData {
+      // Build views from layout nodes (multi-tab: glance/split)
+      interface InternalLayoutNodeData {
         id: string;
         mode: string;
         profileId: string;
@@ -258,10 +259,10 @@ export const TabsProvider = ({ children }: TabsProviderProps) => {
         nodeData: TabLayoutNodeData | null;
       }
 
-      const allGroupDatas: InternalGroupData[] = [];
+      const allLayoutNodeDatas: InternalLayoutNodeData[] = [];
 
       for (const node of tabsData.layoutNodes) {
-        allGroupDatas.push({
+        allLayoutNodeDatas.push({
           id: node.id,
           mode: node.mode,
           profileId: node.profileId,
@@ -273,12 +274,12 @@ export const TabsProvider = ({ children }: TabsProviderProps) => {
         });
       }
 
-      // Create synthetic single-tab groups for tabs not in any multi-tab node.
+      // Create synthetic single-tab layout nodes for tabs not in any multi-tab node.
       // Skip pinned/bookmark-owned tabs — they appear in the pin grid, not the sidebar.
       for (const tab of tabsData.tabs) {
         if (tabsInNodes.has(tab.id)) continue;
         if (tab.owner.kind !== "normal") continue;
-        allGroupDatas.push({
+        allLayoutNodeDatas.push({
           id: `s-${tab.uniqueId}`,
           mode: "single",
           profileId: tab.profileId,
@@ -289,11 +290,11 @@ export const TabsProvider = ({ children }: TabsProviderProps) => {
         });
       }
 
-      const tabGroups: TabGroup[] = [];
+      const layoutNodes: TabLayoutNodeView[] = [];
 
-      for (const groupData of allGroupDatas) {
+      for (const nodeData of allLayoutNodeDatas) {
         const tabs: TabData[] = [];
-        for (const tabId of groupData.tabIds) {
+        for (const tabId of nodeData.tabIds) {
           const tab = tabById.get(tabId);
           if (tab) {
             tabs.push(tab);
@@ -302,75 +303,75 @@ export const TabsProvider = ({ children }: TabsProviderProps) => {
 
         if (tabs.length === 0) continue;
 
-        const activeNodeId = activeNodeBySpace.get(groupData.spaceId);
-        // For synthetic single-tab groups, check if any of their tabs match the active node
+        const activeNodeId = activeNodeBySpace.get(nodeData.spaceId);
+        // For synthetic single-tab nodes, check if any of their tabs match the active node
         let isActive = false;
         if (activeNodeId) {
-          if (groupData.id === activeNodeId) {
+          if (nodeData.id === activeNodeId) {
             isActive = true;
-          } else if (groupData.mode === "single") {
+          } else if (nodeData.mode === "single") {
             // Single-node ID format: check if active node references this tab
             const activeTabId = parseInt(activeNodeId);
-            if (!isNaN(activeTabId) && groupData.tabIds.includes(activeTabId)) {
+            if (!isNaN(activeTabId) && nodeData.tabIds.includes(activeTabId)) {
               isActive = true;
             }
           }
         }
 
-        const focusedTab = focusedTabBySpaceId.get(groupData.spaceId) ?? null;
+        const focusedTab = focusedTabBySpaceId.get(nodeData.spaceId) ?? null;
 
-        const tabGroupKey = `${groupData.spaceId}:${groupData.id}`;
-        const previousEntry = previousTabGroupCache.get(tabGroupKey);
+        const layoutNodeKey = `${nodeData.spaceId}:${nodeData.id}`;
+        const previousEntry = previousLayoutNodeCache.get(layoutNodeKey);
 
-        let tabGroup: TabGroup;
+        let layoutNode: TabLayoutNodeView;
         if (
           previousEntry &&
-          previousEntry.source === groupData.nodeData &&
+          previousEntry.source === nodeData.nodeData &&
           previousEntry.active === isActive &&
           previousEntry.focusedTab === focusedTab &&
           areSameTabRefs(previousEntry.tabs, tabs)
         ) {
-          tabGroup = previousEntry.value;
+          layoutNode = previousEntry.value;
         } else {
-          tabGroup = {
-            id: groupData.id,
-            mode: groupData.mode,
-            profileId: groupData.profileId,
-            spaceId: groupData.spaceId,
-            position: groupData.position,
-            tabIds: groupData.tabIds,
-            frontTabId: groupData.frontTabId,
+          layoutNode = {
+            id: nodeData.id,
+            mode: nodeData.mode,
+            profileId: nodeData.profileId,
+            spaceId: nodeData.spaceId,
+            position: nodeData.position,
+            tabIds: nodeData.tabIds,
+            frontTabId: nodeData.frontTabId,
             tabs,
             active: isActive,
             focusedTab
           };
         }
 
-        nextTabGroupCache.set(tabGroupKey, {
-          source: groupData.nodeData,
+        nextLayoutNodeCache.set(layoutNodeKey, {
+          source: nodeData.nodeData,
           tabs,
           active: isActive,
           focusedTab,
-          value: tabGroup
+          value: layoutNode
         });
-        tabGroups.push(tabGroup);
+        layoutNodes.push(layoutNode);
 
-        const existingGroups = tabGroupsBySpaceId.get(groupData.spaceId);
-        if (existingGroups) {
-          existingGroups.push(tabGroup);
+        const existingNodes = layoutNodesBySpaceId.get(nodeData.spaceId);
+        if (existingNodes) {
+          existingNodes.push(layoutNode);
         } else {
-          tabGroupsBySpaceId.set(groupData.spaceId, [tabGroup]);
+          layoutNodesBySpaceId.set(nodeData.spaceId, [layoutNode]);
         }
 
-        if (isActive && !activeTabGroupBySpaceId.has(groupData.spaceId)) {
-          activeTabGroupBySpaceId.set(groupData.spaceId, tabGroup);
+        if (isActive && !activeLayoutNodeBySpaceId.has(nodeData.spaceId)) {
+          activeLayoutNodeBySpaceId.set(nodeData.spaceId, layoutNode);
         }
       }
 
-      for (const [spaceId, spaceTabGroups] of tabGroupsBySpaceId) {
-        spaceTabGroups.sort((a, b) => a.position - b.position);
-        if (!activeTabGroupBySpaceId.has(spaceId)) {
-          activeTabGroupBySpaceId.set(spaceId, null);
+      for (const [spaceId, spaceLayoutNodes] of layoutNodesBySpaceId) {
+        spaceLayoutNodes.sort((a, b) => a.position - b.position);
+        if (!activeLayoutNodeBySpaceId.has(spaceId)) {
+          activeLayoutNodeBySpaceId.set(spaceId, null);
         }
         if (!focusedTabBySpaceId.has(spaceId)) {
           focusedTabBySpaceId.set(spaceId, null);
@@ -378,30 +379,30 @@ export const TabsProvider = ({ children }: TabsProviderProps) => {
       }
 
       return {
-        tabGroups,
-        tabGroupsBySpaceId,
-        activeTabGroupBySpaceId,
+        layoutNodes,
+        layoutNodesBySpaceId,
+        activeLayoutNodeBySpaceId,
         focusedTabBySpaceId,
-        nextTabGroupCache
+        nextLayoutNodeCache
       };
     }, [tabsData]);
 
   useEffect(() => {
-    tabGroupCacheRef.current = nextTabGroupCache;
-  }, [nextTabGroupCache]);
+    layoutNodeCacheRef.current = nextLayoutNodeCache;
+  }, [nextLayoutNodeCache]);
 
-  const getTabGroups = useCallback(
+  const getLayoutNodes = useCallback(
     (spaceId: string) => {
-      return tabGroupsBySpaceId.get(spaceId) ?? EMPTY_TAB_GROUPS;
+      return layoutNodesBySpaceId.get(spaceId) ?? EMPTY_LAYOUT_NODES;
     },
-    [tabGroupsBySpaceId]
+    [layoutNodesBySpaceId]
   );
 
-  const getActiveTabGroup = useCallback(
+  const getActiveLayoutNode = useCallback(
     (spaceId: string) => {
-      return activeTabGroupBySpaceId.get(spaceId) ?? null;
+      return activeLayoutNodeBySpaceId.get(spaceId) ?? null;
     },
-    [activeTabGroupBySpaceId]
+    [activeLayoutNodeBySpaceId]
   );
 
   const getFocusedTab = useCallback(
@@ -411,10 +412,10 @@ export const TabsProvider = ({ children }: TabsProviderProps) => {
     [focusedTabBySpaceId]
   );
 
-  const activeTabGroup = useMemo(() => {
+  const activeLayoutNode = useMemo(() => {
     if (!currentSpace) return null;
-    return getActiveTabGroup(currentSpace.id);
-  }, [getActiveTabGroup, currentSpace]);
+    return getActiveLayoutNode(currentSpace.id);
+  }, [getActiveLayoutNode, currentSpace]);
 
   const focusedTab = useMemo(() => {
     if (!currentSpace) return null;
@@ -436,15 +437,15 @@ export const TabsProvider = ({ children }: TabsProviderProps) => {
     }
   }, [focusedTab]);
 
-  const groupsContextValue = useMemo(
+  const layoutNodesContextValue = useMemo(
     () => ({
-      tabGroups,
-      getTabGroups,
-      getActiveTabGroup,
+      layoutNodes,
+      getLayoutNodes,
+      getActiveLayoutNode,
       getFocusedTab,
-      activeTabGroup
+      activeLayoutNode
     }),
-    [tabGroups, getTabGroups, getActiveTabGroup, getFocusedTab, activeTabGroup]
+    [layoutNodes, getLayoutNodes, getActiveLayoutNode, getFocusedTab, activeLayoutNode]
   );
 
   const focusedContextValue = useMemo(
@@ -462,19 +463,19 @@ export const TabsProvider = ({ children }: TabsProviderProps) => {
 
   const contextValue = useMemo(
     () => ({
-      ...groupsContextValue,
+      ...layoutNodesContextValue,
       ...focusedContextValue,
       // Utilities //
       tabsData,
       getActiveTabId,
       getFocusedTabId
     }),
-    [groupsContextValue, focusedContextValue, tabsData, getActiveTabId, getFocusedTabId]
+    [layoutNodesContextValue, focusedContextValue, tabsData, getActiveTabId, getFocusedTabId]
   );
 
   return (
     <TabsContext.Provider value={contextValue}>
-      <TabsGroupsContext.Provider value={groupsContextValue}>
+      <TabsLayoutNodesContext.Provider value={layoutNodesContextValue}>
         <TabsFocusedContext.Provider value={focusedContextValue}>
           <TabsFocusedIdContext.Provider value={focusedTabId}>
             <TabsFocusedLoadingContext.Provider value={isFocusedTabLoading}>
@@ -484,7 +485,7 @@ export const TabsProvider = ({ children }: TabsProviderProps) => {
             </TabsFocusedLoadingContext.Provider>
           </TabsFocusedIdContext.Provider>
         </TabsFocusedContext.Provider>
-      </TabsGroupsContext.Provider>
+      </TabsLayoutNodesContext.Provider>
     </TabsContext.Provider>
   );
 };

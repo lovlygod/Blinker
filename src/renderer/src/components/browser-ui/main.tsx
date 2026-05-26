@@ -20,7 +20,7 @@ import {
   useFocusedTab,
   useFocusedTabFullscreen,
   useFocusedTabLoading,
-  useTabsGroups
+  useTabLayoutNodes
 } from "@/components/providers/tabs-provider";
 import { TabDisabler } from "@/components/logic/tab-disabler";
 import { BrowserActionProvider } from "@/components/providers/browser-action-provider";
@@ -28,7 +28,6 @@ import { ExtensionsProviderWithSpaces } from "@/components/providers/extensions-
 import MinimalToastProvider from "@/components/providers/minimal-toast-provider";
 import { ActionsProvider } from "@/components/providers/actions-provider";
 import { PinnedTabsProvider } from "@/components/providers/pinned-tabs-provider";
-import { TabServiceProvider } from "@/components/providers/tab-service-provider";
 import BrowserContent from "@/components/browser-ui/browser-content";
 import { TargetUrlIndicator } from "@/components/browser-ui/target-url-indicator";
 import { FindInPage } from "@/components/browser-ui/find-in-page";
@@ -115,16 +114,16 @@ const WindowTitle = memo(function WindowTitle() {
 });
 
 function AutoNewTab({ isReady }: { isReady: boolean }) {
-  const { tabGroups } = useTabsGroups();
+  const { layoutNodes } = useTabLayoutNodes();
   const openedNewTabRef = useRef(false);
   useEffect(() => {
     if (isReady && !openedNewTabRef.current) {
       openedNewTabRef.current = true;
-      if (tabGroups.length === 0) {
+      if (layoutNodes.length === 0) {
         flow.newTab.open();
       }
     }
-  }, [isReady, tabGroups.length]);
+  }, [isReady, layoutNodes.length]);
   return null;
 }
 
@@ -337,18 +336,16 @@ export function BrowserUI({ type }: { type: BrowserUIType }) {
             <SpacesProvider windowType={type}>
               <TabsProvider>
                 <PinnedTabsProvider>
-                  <TabServiceProvider>
-                    <BrowserActionProvider>
-                      <ExtensionsProviderWithSpaces>
-                        <PasskeysRequestProvider>
-                          <ActivePromptsProvider>
-                            <TabDisabler />
-                            <InternalBrowserUI isReady={isReady} type={type} />
-                          </ActivePromptsProvider>
-                        </PasskeysRequestProvider>
-                      </ExtensionsProviderWithSpaces>
-                    </BrowserActionProvider>
-                  </TabServiceProvider>
+                  <BrowserActionProvider>
+                    <ExtensionsProviderWithSpaces>
+                      <PasskeysRequestProvider>
+                        <ActivePromptsProvider>
+                          <TabDisabler />
+                          <InternalBrowserUI isReady={isReady} type={type} />
+                        </ActivePromptsProvider>
+                      </PasskeysRequestProvider>
+                    </ExtensionsProviderWithSpaces>
+                  </BrowserActionProvider>
                 </PinnedTabsProvider>
               </TabsProvider>
             </SpacesProvider>

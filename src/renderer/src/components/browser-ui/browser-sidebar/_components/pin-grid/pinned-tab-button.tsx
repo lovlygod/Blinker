@@ -5,7 +5,7 @@ import { draggable, dropTargetForElements } from "@atlaskit/pragmatic-drag-and-d
 import { attachClosestEdge, extractClosestEdge } from "@atlaskit/pragmatic-drag-and-drop-hitbox/closest-edge";
 import { motion } from "motion/react";
 import type { PinnedTabData } from "~/types/tab-service";
-import { isPinnedTabSource, isTabGroupSource } from "@/components/browser-ui/browser-sidebar/_components/drag-utils";
+import { isPinnedTabSource, isTabLayoutNodeSource } from "@/components/browser-ui/browser-sidebar/_components/drag-utils";
 import { generateBorderGradient } from "@/components/browser-ui/browser-sidebar/_components/pin-grid/pin-visual";
 import "./pin.css";
 
@@ -110,7 +110,7 @@ export function PinnedTabButton({
         if (isPinnedTabSource(data)) {
           return !profileId || data.profileId === profileId;
         }
-        if (isTabGroupSource(data)) {
+        if (isTabLayoutNodeSource(data)) {
           // Only accept tabs from the same profile
           return !profileId || data.profileId === profileId;
         }
@@ -146,7 +146,7 @@ export function PinnedTabButton({
 
         if (isPinnedTabSource(sourceData)) {
           onReorder(sourceData.pinnedTabId, newPosition);
-        } else if (isTabGroupSource(sourceData)) {
+        } else if (isTabLayoutNodeSource(sourceData)) {
           onCreateFromTab(sourceData.primaryTabId, newPosition);
         }
       }

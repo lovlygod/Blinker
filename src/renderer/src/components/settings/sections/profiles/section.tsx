@@ -98,9 +98,7 @@ function SearchSettingsTab() {
       </CardHeader>
       <CardContent>
         <div className="rounded-md bg-muted p-4 text-sm">
-          <p className="text-muted-foreground">
-            {t("profiles.searchDescription")}
-          </p>
+          <p className="text-muted-foreground">{t("profiles.searchDescription")}</p>
         </div>
       </CardContent>
     </Card>
@@ -152,9 +150,7 @@ function SpacesTab({ profile, spaces, onRefreshSpaces, navigateToSpace }: Spaces
       </CardHeader>
       <CardContent>
         {spaces.length === 0 ? (
-          <div className="text-center p-6 text-muted-foreground">
-            {t("profiles.noSpaces")}
-          </div>
+          <div className="text-center p-6 text-muted-foreground">{t("profiles.noSpaces")}</div>
         ) : (
           <div className="grid gap-3">
             {spaces.map((space) => (
@@ -660,9 +656,7 @@ export function ProfilesSettings({ navigateToSpaces, navigateToSpace }: Profiles
           ) : (
             <div className="flex flex-col gap-4">
               {profiles.length === 0 ? (
-                <div className="text-center p-6 text-muted-foreground">
-                  {t("profiles.empty")}
-                </div>
+                <div className="text-center p-6 text-muted-foreground">{t("profiles.empty")}</div>
               ) : (
                 profiles.map((profile) => (
                   <ProfileCard key={profile.id} profile={profile} activateEdit={() => setActiveProfile(profile)} />

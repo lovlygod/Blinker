@@ -1,5 +1,3 @@
 export const UmamiScriptLoader = () => {
-  return (
-    null
-  );
+  return null;
 };

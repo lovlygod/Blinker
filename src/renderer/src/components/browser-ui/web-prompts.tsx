@@ -256,7 +256,9 @@ function SavePasswordCard({ prompt }: { prompt: SavePasswordActivePrompt }) {
       <CardContent>
         <FieldGroup className="gap-4">
           <Field>
-            <FieldLabel className="text-muted-foreground">{t("prompt.savePasswordFor", { site: originLabel })}</FieldLabel>
+            <FieldLabel className="text-muted-foreground">
+              {t("prompt.savePasswordFor", { site: originLabel })}
+            </FieldLabel>
           </Field>
           <Field>
             <FieldLabel>{t("prompt.username")}</FieldLabel>

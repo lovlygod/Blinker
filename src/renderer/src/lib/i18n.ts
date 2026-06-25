@@ -251,7 +251,8 @@ const ru = {
   "external.title": "Внешние приложения",
   "external.subtitle": "Управляйте сайтами и протоколами, которые можно открывать автоматически.",
   "external.permissions": "Разрешения протоколов",
-  "external.permissionsDescription": "Сайты, которым разрешено открывать внешние приложения через конкретные протоколы.",
+  "external.permissionsDescription":
+    "Сайты, которым разрешено открывать внешние приложения через конкретные протоколы.",
   "external.searchPlaceholder": "Поиск по сайту или протоколу...",
   "external.loading": "Загружаю разрешения...",
   "external.noMatches": "Подходящих разрешений не найдено",
@@ -463,13 +464,15 @@ const en: Record<keyof typeof ru, string> = {
   "profiles.selectProfile": "Select profile",
   "profiles.createSpace": "Create New Space",
   "profiles.deleteSpace": "Delete Space",
-  "profiles.deleteSpaceDescription": "Are you sure you want to delete the space \"{space}\"? This action cannot be undone.",
+  "profiles.deleteSpaceDescription":
+    'Are you sure you want to delete the space "{space}"? This action cannot be undone.',
   "profiles.createSpacePlainDescription": "Enter a name for your new browsing space.",
-  "profiles.createSpaceDescription": "Enter a name for the new space in profile \"{profile}\".",
+  "profiles.createSpaceDescription": 'Enter a name for the new space in profile "{profile}".',
   "profiles.spaceNamePlaceholder": "Enter space name",
   "profiles.loadingSpaces": "Loading spaces...",
   "profiles.deleteTitle": "Delete Profile",
-  "profiles.deleteDescription": "Are you sure you want to delete the profile \"{profile}\"? This action cannot be undone.",
+  "profiles.deleteDescription":
+    'Are you sure you want to delete the profile "{profile}"? This action cannot be undone.',
   "profiles.deleteLast": "Cannot delete the last remaining profile",
   "profiles.deleteProfile": "Delete profile",
   "shortcuts.title": "Keyboard Shortcuts",
@@ -478,21 +481,22 @@ const en: Record<keyof typeof ru, string> = {
   "shortcuts.updated": "Shortcut updated successfully.",
   "shortcuts.updateFailed": "Failed to update shortcut.",
   "shortcuts.saveError": "An error occurred while saving the shortcut.",
-  "shortcuts.resetOne": "Shortcut for \"{name}\" reset to default.",
-  "shortcuts.resetOneFailed": "Could not reset shortcut for \"{name}\".",
+  "shortcuts.resetOne": 'Shortcut for "{name}" reset to default.',
+  "shortcuts.resetOneFailed": 'Could not reset shortcut for "{name}".',
   "shortcuts.resetError": "An error occurred while resetting the shortcut.",
   "shortcuts.resetAll": "All shortcuts have been reset to their defaults.",
   "shortcuts.resetAllFailed": "Could not reset all shortcuts.",
   "shortcuts.loading": "Loading keyboard shortcuts...",
   "shortcuts.noMatches": "No matching shortcuts found",
-  "shortcuts.noResultsFor": "No results for \"{term}\". Try a different search term.",
+  "shortcuts.noResultsFor": 'No results for "{term}". Try a different search term.',
   "shortcuts.tryDifferent": "Try a different search term.",
   "shortcuts.none": "No shortcuts available",
   "shortcuts.noneDescription": "Shortcuts could not be loaded or none are defined.",
   "shortcuts.modified": "modified",
   "shortcuts.modifiedTitle": "Modified Shortcuts ({count})",
   "shortcuts.resetTitle": "Reset All Shortcuts",
-  "shortcuts.resetDescription": "Are you sure you want to reset all shortcuts to their default values? This action cannot be undone.",
+  "shortcuts.resetDescription":
+    "Are you sure you want to reset all shortcuts to their default values? This action cannot be undone.",
   "shortcuts.resetButton": "Reset All",
   "shortcuts.searchPlaceholder": "Search shortcuts...",
   "shortcuts.resetDefaults": "Reset All Defaults",
@@ -515,12 +519,13 @@ const en: Record<keyof typeof ru, string> = {
   "external.confirmRevoke": "Confirm Revocation",
   "external.revokeDescription": "Revoke permission for {site} to open {protocol} links?",
   "external.revokePermission": "Revoke Permission",
-  "external.note": "When you revoke a permission, the website will need to ask for permission again the next time it tries to open that protocol.",
+  "external.note":
+    "When you revoke a permission, the website will need to ask for permission again the next time it tries to open that protocol.",
   "external.loadFailed": "Could not load permissions.",
   "external.revoked": "Permission revoked.",
   "external.revokeFailed": "Failed to revoke permission.",
   "external.revokeError": "An error occurred while revoking permission.",
-  "search.verbatim": "Search for \"{query}\""
+  "search.verbatim": 'Search for "{query}"'
 };
 
 const dictionaries = { ru, en };

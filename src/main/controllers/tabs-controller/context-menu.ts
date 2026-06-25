@@ -43,7 +43,8 @@ const searchEngines: Record<SearchEngineId, { name: string; url: string }> = {
 
 function getDefaultSearchEngineForMenu() {
   const settingValue = getSettingValueById("defaultSearchEngine");
-  const engineId = typeof settingValue === "string" && settingValue in searchEngines ? (settingValue as SearchEngineId) : "google";
+  const engineId =
+    typeof settingValue === "string" && settingValue in searchEngines ? (settingValue as SearchEngineId) : "google";
   return searchEngines[engineId];
 }
 

@@ -179,12 +179,16 @@ function installPasswordAutofillBridge() {
           });
 
           const usernameField =
-            candidates.find((input) => /user|email|login|name|account/i.test(`${input.name} ${input.id} ${input.autocomplete}`)) ??
-            candidates.filter((input) => {
-              const passwordRect = passwordField.getBoundingClientRect();
-              const inputRect = input.getBoundingClientRect();
-              return inputRect.top <= passwordRect.top;
-            }).at(-1) ??
+            candidates.find((input) =>
+              /user|email|login|name|account/i.test(`${input.name} ${input.id} ${input.autocomplete}`)
+            ) ??
+            candidates
+              .filter((input) => {
+                const passwordRect = passwordField.getBoundingClientRect();
+                const inputRect = input.getBoundingClientRect();
+                return inputRect.top <= passwordRect.top;
+              })
+              .at(-1) ??
             null;
 
           return { form, usernameField, passwordField };
@@ -201,7 +205,9 @@ function installPasswordAutofillBridge() {
       async function fillNearest(target: EventTarget | null) {
         if (!(target instanceof HTMLInputElement)) return;
         const fields = findLoginFields();
-        const match = fields.find(({ usernameField, passwordField }) => target === usernameField || target === passwordField);
+        const match = fields.find(
+          ({ usernameField, passwordField }) => target === usernameField || target === passwordField
+        );
         if (!match || match.passwordField.value) return;
 
         const [credential] = await requestAutofill();

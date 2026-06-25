@@ -201,7 +201,11 @@ ipcMain.handle("extensions:import-unpacked", async (event: IpcMainInvokeEvent): 
   const extensionData = loadedProfile.extensionsManager.getExtensionDataFromCache(extensionId);
   if (!extensionData) return null;
 
-  const sharedExtension = await generateSharedExtensionData(loadedProfile.extensionsManager, extensionId, extensionData);
+  const sharedExtension = await generateSharedExtensionData(
+    loadedProfile.extensionsManager,
+    extensionId,
+    extensionData
+  );
   await fireOnExtensionsUpdated(profileId);
   return sharedExtension;
 });

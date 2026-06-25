@@ -1,17 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
-import {
-  Check,
-  Eye,
-  EyeOff,
-  KeyRound,
-  Loader2,
-  Plus,
-  Search,
-  Trash2,
-  Clipboard,
-  Upload
-} from "lucide-react";
+import { Check, Eye, EyeOff, KeyRound, Loader2, Plus, Search, Trash2, Clipboard, Upload } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -161,7 +150,10 @@ export function PasswordsSettings() {
   const [addOpen, setAddOpen] = useState(false);
 
   const loadProfiles = useCallback(async () => {
-    const [allProfiles, currentProfileId] = await Promise.all([flow.profiles.getProfiles(), flow.profiles.getUsingProfile()]);
+    const [allProfiles, currentProfileId] = await Promise.all([
+      flow.profiles.getProfiles(),
+      flow.profiles.getUsingProfile()
+    ]);
     const userProfiles = allProfiles.filter((profile) => !profile.internal);
     setProfiles(userProfiles);
     setProfileId(currentProfileId ?? userProfiles[0]?.id ?? null);
@@ -278,8 +270,8 @@ export function PasswordsSettings() {
                 Хранилище паролей
               </CardTitle>
               <CardDescription>
-                Поддерживаются CSV-экспорты Chrome, Edge, Brave, Vivaldi, Opera, Firefox, Safari, Bitwarden,
-                1Password, LastPass и Dashlane.
+                Поддерживаются CSV-экспорты Chrome, Edge, Brave, Vivaldi, Opera, Firefox, Safari, Bitwarden, 1Password,
+                LastPass и Dashlane.
               </CardDescription>
             </div>
             <div className="flex flex-wrap gap-2">
@@ -396,7 +388,11 @@ export function PasswordsSettings() {
                             onClick={() => copyPassword(entry.id, entry.password)}
                             title="Скопировать"
                           >
-                            {copiedPasswordId === entry.id ? <Check className="h-4 w-4" /> : <Clipboard className="h-4 w-4" />}
+                            {copiedPasswordId === entry.id ? (
+                              <Check className="h-4 w-4" />
+                            ) : (
+                              <Clipboard className="h-4 w-4" />
+                            )}
                           </Button>
                           <Button
                             variant="ghost"

@@ -222,11 +222,7 @@ export function ExternalAppsSettings() {
             <p className="font-medium text-card-foreground">
               {searchQuery ? t("external.noMatches") : t("external.none")}
             </p>
-            {!searchQuery && (
-              <p className="text-sm text-muted-foreground mt-1">
-                {t("external.noneDescription")}
-              </p>
-            )}
+            {!searchQuery && <p className="text-sm text-muted-foreground mt-1">{t("external.noneDescription")}</p>}
           </div>
         ) : (
           <div className="space-y-3">
@@ -242,9 +238,7 @@ export function ExternalAppsSettings() {
         )}
 
         <div className="border-t pt-4 mt-2">
-          <p className="text-xs text-muted-foreground">
-            {t("external.note")}
-          </p>
+          <p className="text-xs text-muted-foreground">{t("external.note")}</p>
         </div>
       </div>
     </div>

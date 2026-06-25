@@ -119,7 +119,13 @@ export function hasSamePasswordForProfile(profileId: string, input: PasswordEntr
   const existing = getDb()
     .select()
     .from(passwords)
-    .where(and(eq(passwords.profileId, profileId), eq(passwords.origin, origin), eq(passwords.username, input.username.trim())))
+    .where(
+      and(
+        eq(passwords.profileId, profileId),
+        eq(passwords.origin, origin),
+        eq(passwords.username, input.username.trim())
+      )
+    )
     .limit(1)
     .get();
   if (!existing) return false;
@@ -263,7 +269,11 @@ function rowToPasswordInput(row: CsvRow, source: string): PasswordEntryInput | n
   };
 }
 
-export function importPasswordsFromCsvText(profileId: string, text: string, fileName: string | null): PasswordImportResult {
+export function importPasswordsFromCsvText(
+  profileId: string,
+  text: string,
+  fileName: string | null
+): PasswordImportResult {
   const rows = parseCsv(text);
   const source = detectSource(rows);
   let imported = 0;
@@ -281,7 +291,9 @@ export function importPasswordsFromCsvText(profileId: string, text: string, file
     const existing = getDb()
       .select({ id: passwords.id })
       .from(passwords)
-      .where(and(eq(passwords.profileId, profileId), eq(passwords.origin, origin), eq(passwords.username, input.username)))
+      .where(
+        and(eq(passwords.profileId, profileId), eq(passwords.origin, origin), eq(passwords.username, input.username))
+      )
       .limit(1)
       .get();
 
@@ -304,13 +316,7 @@ export function exportPasswordsToCsvText(profileId: string): string {
   const lines = [
     header.map(csvCell).join(","),
     ...rows.map((entry) =>
-      [
-        entry.title || titleFromUrl(entry.url),
-        entry.url,
-        entry.username,
-        entry.password,
-        entry.note ?? ""
-      ]
+      [entry.title || titleFromUrl(entry.url), entry.url, entry.username, entry.password, entry.note ?? ""]
         .map(csvCell)
         .join(",")
     )

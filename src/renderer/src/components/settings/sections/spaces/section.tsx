@@ -207,9 +207,7 @@ export function SpacesSettings({ initialSelectedProfile, initialSelectedSpace }:
           ) : (
             <div className="flex flex-col gap-4">
               {filteredSpaces.length === 0 ? (
-                <div className="text-center p-6 text-muted-foreground">
-                  {t("profiles.noSpaces")}
-                </div>
+                <div className="text-center p-6 text-muted-foreground">{t("profiles.noSpaces")}</div>
               ) : (
                 <Reorder.Group
                   axis="y"

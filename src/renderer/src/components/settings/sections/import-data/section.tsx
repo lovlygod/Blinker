@@ -96,7 +96,10 @@ export function ImportDataSettings() {
   const importItems = getImportItems();
 
   const loadProfiles = useCallback(async () => {
-    const [allProfiles, currentProfileId] = await Promise.all([flow.profiles.getProfiles(), flow.profiles.getUsingProfile()]);
+    const [allProfiles, currentProfileId] = await Promise.all([
+      flow.profiles.getProfiles(),
+      flow.profiles.getUsingProfile()
+    ]);
     const userProfiles = allProfiles.filter((profile) => !profile.internal);
     setProfiles(userProfiles);
     setProfileId(currentProfileId ?? userProfiles[0]?.id ?? null);

@@ -133,7 +133,7 @@ const electronBuilderConfig: Configuration = {
     provider: "github",
     owner: "lovlygod",
     repo: "Blinker",
-    releaseType: "prerelease"
+    releaseType: "release"
   },
   electronDist: "node_modules/electron/dist",
   afterPack: "./build/hooks/afterPack.js",

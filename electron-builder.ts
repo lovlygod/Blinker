@@ -11,6 +11,10 @@ function getCustomAppVersion(): string | undefined {
 
 // Options //
 const customAppVersion = getCustomAppVersion();
+const hasMacSigningSecrets = Boolean(process.env.CSC_LINK);
+const hasMacNotarizationSecrets = Boolean(
+  process.env.APPLE_API_KEY_DATA && process.env.APPLE_API_KEY_ID && process.env.APPLE_API_ISSUER
+);
 if (customAppVersion) {
   console.log(`Using custom version: ${customAppVersion}`);
 }
@@ -105,8 +109,9 @@ const electronBuilderConfig: Configuration = {
   mac: {
     category: "public.app-category.productivity",
     entitlements: "./build/entitlements.mac.plist",
-    notarize: true,
-    provisioningProfile: "build/profile.provisionprofile",
+    identity: hasMacSigningSecrets ? undefined : null,
+    notarize: hasMacNotarizationSecrets,
+    ...(hasMacSigningSecrets && { provisioningProfile: "build/profile.provisionprofile" }),
     binaries: ["Contents/PlugIns/DockTilePlugIn.plugin"],
     extendInfo: {
       CFBundleIconName: "AppIcon",

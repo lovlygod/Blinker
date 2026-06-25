@@ -75,11 +75,20 @@ jobs:
           flatpak remote-add --if-not-exists --user flathub https://dl.flathub.org/repo/flathub.flatpakrepo
 
       - name: Install Dependencies
-        run: bun install --development --frozen-lockfile
+        run: bun install --development --frozen-lockfile --ignore-scripts
         env:
           SHARP_IGNORE_GLOBAL_LIBVIPS: 1
           GYP_MSVS_VERSION: 2022
           npm_config_msvs_version: 2022
+          VisualStudioVersion: "17.0"
+
+      - name: Rebuild Electron native dependencies
+        run: bun run postinstall
+        env:
+          SHARP_IGNORE_GLOBAL_LIBVIPS: 1
+          GYP_MSVS_VERSION: 2022
+          npm_config_msvs_version: 2022
+          VisualStudioVersion: "17.0"
 
       - name: Install Castlabs EVS
         if: matrix.os == 'macos-latest' || matrix.os == 'macos-15-intel' || matrix.os == 'windows-latest'

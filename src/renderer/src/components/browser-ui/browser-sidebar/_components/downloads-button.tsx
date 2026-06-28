@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
-import { Archive, Check, DownloadIcon, File, FolderOpen, Loader2, SearchX } from "lucide-react";
+import { Archive, Check, DownloadIcon, File, FolderOpen, Loader2, Pause, Play, RotateCcw, SearchX, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/portal/popover";
 import { PortalComponent } from "@/components/portal/portal";
@@ -17,8 +17,9 @@ function progressValue(download: DownloadEntry) {
 
 function stateLabel(download: DownloadEntry) {
   if (download.state === "completed") return download.exists ? "Готово" : "Удалено";
+  if (download.state === "paused") return "Пауза";
   if (download.state === "cancelled") return "Отменено";
-  if (download.state === "interrupted") return "Ошибка";
+  if (download.state === "interrupted") return download.errorMessage || "Ошибка";
   return "Скачивается";
 }
 
@@ -32,6 +33,11 @@ function formatBytes(bytes: number) {
     unit += 1;
   }
   return `${value >= 10 || unit === 0 ? Math.round(value) : value.toFixed(1)} ${units[unit]}`;
+}
+
+function formatSpeed(bytesPerSecond: number) {
+  if (!bytesPerSecond || bytesPerSecond <= 0) return "";
+  return `${formatBytes(bytesPerSecond)}/s`;
 }
 
 function FlyingDownloadAnimation({
@@ -89,6 +95,8 @@ function FlyingDownloadAnimation({
 function DownloadRow({ download }: { download: DownloadEntry }) {
   const isGone = download.state === "completed" && !download.exists;
   const isActive = download.state === "progressing";
+  const isPaused = download.state === "paused";
+  const canRetry = download.state === "cancelled" || download.state === "interrupted" || isGone;
 
   return (
     <motion.div
@@ -128,12 +136,57 @@ function DownloadRow({ download }: { download: DownloadEntry }) {
           <div className="mt-1 flex items-center gap-2 text-[11px] text-white/55">
             <span>{stateLabel(download)}</span>
             {download.totalBytes > 0 && !isGone && <span>{formatBytes(download.totalBytes)}</span>}
+            {download.speedBytesPerSecond > 0 && <span>{formatSpeed(download.speedBytesPerSecond)}</span>}
             {download.state === "progressing" && (
               <Progress value={progressValue(download)} className="h-1 w-20 bg-white/10" />
             )}
           </div>
         </div>
       </button>
+      {isActive && (
+        <Button
+          variant="ghost"
+          size="icon"
+          className="size-7 shrink-0 text-white/55 opacity-70 transition-opacity hover:bg-white/10 hover:text-white hover:opacity-100"
+          onClick={() => void flow.downloads.pause(download.id)}
+          aria-label="Пауза"
+        >
+          <Pause className="size-3.5" />
+        </Button>
+      )}
+      {isPaused && (
+        <Button
+          variant="ghost"
+          size="icon"
+          className="size-7 shrink-0 text-white/55 opacity-70 transition-opacity hover:bg-white/10 hover:text-white hover:opacity-100"
+          onClick={() => void flow.downloads.resume(download.id)}
+          aria-label="Продолжить"
+        >
+          <Play className="size-3.5" />
+        </Button>
+      )}
+      {(isActive || isPaused) && (
+        <Button
+          variant="ghost"
+          size="icon"
+          className="size-7 shrink-0 text-white/55 opacity-70 transition-opacity hover:bg-white/10 hover:text-white hover:opacity-100"
+          onClick={() => void flow.downloads.cancel(download.id)}
+          aria-label="Отменить"
+        >
+          <X className="size-3.5" />
+        </Button>
+      )}
+      {canRetry && (
+        <Button
+          variant="ghost"
+          size="icon"
+          className="size-7 shrink-0 text-white/55 opacity-70 transition-opacity hover:bg-white/10 hover:text-white hover:opacity-100"
+          onClick={() => void flow.downloads.retry(download.id)}
+          aria-label="Скачать снова"
+        >
+          <RotateCcw className="size-3.5" />
+        </Button>
+      )}
       <Button
         variant="ghost"
         size="icon"

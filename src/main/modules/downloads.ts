@@ -15,6 +15,15 @@ import type { DownloadEntry } from "~/types/downloads";
 
 const sessionDownloadIds = new Set<number>();
 const registeredDownloadSessions = new WeakSet<Session>();
+const activeDownloads = new Map<
+  number,
+  {
+    item: DownloadItem;
+    lastBytes: number;
+    lastMeasuredAt: number;
+    speedBytesPerSecond: number;
+  }
+>();
 
 function getSafeFilename(item: DownloadItem) {
   const name = item.getFilename() || "download";
@@ -51,9 +60,31 @@ export function getSessionDownloads(): DownloadEntry[] {
   const rows: DownloadEntry[] = [];
   for (const id of sessionDownloadIds) {
     const row = getDownloadByIdAnyProfile(id);
-    if (row) rows.push(row);
+    if (row) rows.push(enrichDownload(row));
   }
   return rows.sort((a, b) => b.startedAt - a.startedAt).slice(0, 5);
+}
+
+export function enrichDownload(entry: DownloadEntry): DownloadEntry {
+  const active = activeDownloads.get(entry.id);
+  if (!active) return entry;
+
+  const totalBytes = entry.totalBytes || active.item.getTotalBytes();
+  const receivedBytes = entry.receivedBytes || active.item.getReceivedBytes();
+  const remainingBytes = Math.max(0, totalBytes - receivedBytes);
+  const etaSeconds =
+    totalBytes > 0 && active.speedBytesPerSecond > 0
+      ? Math.max(0, Math.ceil(remainingBytes / active.speedBytesPerSecond))
+      : null;
+
+  return {
+    ...entry,
+    totalBytes,
+    receivedBytes,
+    canResume: active.item.canResume(),
+    speedBytesPerSecond: entry.state === "progressing" ? active.speedBytesPerSecond : 0,
+    etaSeconds
+  };
 }
 
 function getDownloadByIdAnyProfile(id: number): DownloadEntry | null {
@@ -129,26 +160,51 @@ function registerDownloadHandling(item: DownloadItem, webContents: WebContents) 
     receivedBytes: item.getReceivedBytes(),
     state: "progressing",
     dangerType: null,
+    errorMessage: null,
     startedAt: now,
     finishedAt: null,
     updatedAt: now
   });
 
   sessionDownloadIds.add(created.id);
+  activeDownloads.set(created.id, {
+    item,
+    lastBytes: item.getReceivedBytes(),
+    lastMeasuredAt: now,
+    speedBytesPerSecond: 0
+  });
   emitDownloadsChanged(created);
 
   item.on("updated", (_event, state) => {
+    const active = activeDownloads.get(created.id);
+    const measuredAt = Date.now();
+    const receivedBytes = item.getReceivedBytes();
+    if (active) {
+      const elapsedMs = Math.max(1, measuredAt - active.lastMeasuredAt);
+      const deltaBytes = Math.max(0, receivedBytes - active.lastBytes);
+      active.speedBytesPerSecond = Math.round((deltaBytes / elapsedMs) * 1000);
+      active.lastBytes = receivedBytes;
+      active.lastMeasuredAt = measuredAt;
+    }
+
     const updated = updateDownload(created.id, {
-      receivedBytes: item.getReceivedBytes(),
+      receivedBytes,
       totalBytes: item.getTotalBytes(),
       state: state === "interrupted" ? "interrupted" : "progressing",
-      dangerType: null
+      dangerType: null,
+      errorMessage: state === "interrupted" ? "Download interrupted" : null
     });
-    if (updated) emitDownloadsChanged();
+    if (updated) emitDownloadsChanged(enrichDownload(updated));
   });
 
   item.once("done", (_event, state) => {
     const finalState = state === "completed" ? "completed" : state === "cancelled" ? "cancelled" : "interrupted";
+    const errorMessage =
+      finalState === "interrupted"
+        ? `Download interrupted${item.canResume() ? ". You can resume it." : ". Try downloading again."}`
+        : finalState === "cancelled"
+          ? "Download cancelled"
+          : null;
     const updated = updateDownload(created.id, {
       receivedBytes: item.getReceivedBytes(),
       totalBytes: item.getTotalBytes(),
@@ -156,10 +212,60 @@ function registerDownloadHandling(item: DownloadItem, webContents: WebContents) 
       finishedAt: Date.now(),
       path: item.getSavePath() || savePath,
       filename: path.basename(item.getSavePath() || savePath),
-      dangerType: null
+      dangerType: null,
+      errorMessage
     });
+    activeDownloads.delete(created.id);
     if (updated) emitDownloadsChanged(updated);
   });
+}
+
+export function pauseDownload(entry: DownloadEntry): boolean {
+  const active = activeDownloads.get(entry.id);
+  if (!active || entry.state !== "progressing") return false;
+  active.item.pause();
+  const updated = updateDownload(entry.id, { state: "paused", errorMessage: null });
+  if (updated) emitDownloadsChanged(enrichDownload(updated));
+  return true;
+}
+
+export function resumeDownload(entry: DownloadEntry): boolean {
+  const active = activeDownloads.get(entry.id);
+  if (!active) return false;
+
+  if (!active.item.canResume()) {
+    const updated = updateDownload(entry.id, {
+      state: "interrupted",
+      errorMessage: "This download cannot be resumed. Try downloading it again."
+    });
+    if (updated) emitDownloadsChanged(updated);
+    return false;
+  }
+
+  active.item.resume();
+  const updated = updateDownload(entry.id, { state: "progressing", errorMessage: null });
+  if (updated) emitDownloadsChanged(enrichDownload(updated));
+  return true;
+}
+
+export function cancelDownload(entry: DownloadEntry): boolean {
+  const active = activeDownloads.get(entry.id);
+  if (!active || (entry.state !== "progressing" && entry.state !== "paused")) return false;
+  active.item.cancel();
+  const updated = updateDownload(entry.id, {
+    state: "cancelled",
+    finishedAt: Date.now(),
+    errorMessage: "Download cancelled"
+  });
+  activeDownloads.delete(entry.id);
+  if (updated) emitDownloadsChanged(updated);
+  return true;
+}
+
+export function retryDownload(entry: DownloadEntry, webContents: WebContents): boolean {
+  if (!entry.url) return false;
+  webContents.downloadURL(entry.url);
+  return true;
 }
 
 export async function openDownloadedFile(entry: DownloadEntry): Promise<boolean> {

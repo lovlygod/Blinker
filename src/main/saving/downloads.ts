@@ -20,10 +20,14 @@ function withExistence(row: DownloadRow): DownloadEntry {
     receivedBytes: row.receivedBytes,
     state: row.state,
     dangerType: row.dangerType,
+    errorMessage: row.errorMessage,
     startedAt: row.startedAt,
     finishedAt: row.finishedAt,
     updatedAt: row.updatedAt,
-    exists: fs.existsSync(row.path)
+    exists: fs.existsSync(row.path),
+    canResume: false,
+    speedBytesPerSecond: 0,
+    etaSeconds: null
   };
 }
 
@@ -42,6 +46,7 @@ export function updateDownload(
     path: string;
     filename: string;
     dangerType: string | null;
+    errorMessage: string | null;
   }>
 ): DownloadEntry | null {
   const updated = getDb()

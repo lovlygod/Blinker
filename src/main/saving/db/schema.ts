@@ -148,8 +148,9 @@ export const downloads = sqliteTable(
     path: text("path").notNull(),
     totalBytes: integer("total_bytes").notNull().default(0),
     receivedBytes: integer("received_bytes").notNull().default(0),
-    state: text("state").$type<"progressing" | "completed" | "cancelled" | "interrupted">().notNull(),
+    state: text("state").$type<"progressing" | "paused" | "completed" | "cancelled" | "interrupted">().notNull(),
     dangerType: text("danger_type"),
+    errorMessage: text("error_message"),
     startedAt: integer("started_at").notNull(),
     finishedAt: integer("finished_at"),
     updatedAt: integer("updated_at").notNull()

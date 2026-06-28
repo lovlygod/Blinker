@@ -17,7 +17,7 @@ import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { cn } from "@/lib/utils";
 import type { DownloadEntry, DownloadsPageCursor } from "~/types/downloads";
-import { Download, File, FolderOpen, Search, Trash2, X } from "lucide-react";
+import { Download, File, FolderOpen, Pause, Play, RotateCcw, Search, Trash2, X } from "lucide-react";
 import { toast } from "sonner";
 
 const DOWNLOADS_PAGE_SIZE = 120;
@@ -38,6 +38,21 @@ function formatBytes(bytes: number) {
   return `${value >= 10 || unit === 0 ? Math.round(value) : value.toFixed(1)} ${units[unit]}`;
 }
 
+function formatSpeed(bytesPerSecond: number) {
+  if (!bytesPerSecond || bytesPerSecond <= 0) return "";
+  return `${formatBytes(bytesPerSecond)}/s`;
+}
+
+function formatEta(seconds: number | null) {
+  if (seconds === null || seconds < 0) return "";
+  if (seconds < 60) return `${seconds}s left`;
+  const minutes = Math.floor(seconds / 60);
+  const rest = seconds % 60;
+  if (minutes < 60) return `${minutes}m ${rest.toString().padStart(2, "0")}s left`;
+  const hours = Math.floor(minutes / 60);
+  return `${hours}h ${(minutes % 60).toString().padStart(2, "0")}m left`;
+}
+
 function progressValue(download: DownloadEntry) {
   if (download.state === "completed") return 100;
   if (download.totalBytes <= 0) return 8;
@@ -46,8 +61,9 @@ function progressValue(download: DownloadEntry) {
 
 function statusText(download: DownloadEntry) {
   if (download.state === "completed") return download.exists ? "Скачано" : "Удалено";
+  if (download.state === "paused") return "Пауза";
   if (download.state === "cancelled") return "Отменено";
-  if (download.state === "interrupted") return "Ошибка загрузки";
+  if (download.state === "interrupted") return download.errorMessage || "Ошибка загрузки";
   const total = formatBytes(download.totalBytes);
   const received = formatBytes(download.receivedBytes);
   return total ? `${received} из ${total}` : "Скачивается";
@@ -83,9 +99,26 @@ function groupDownloads(downloads: DownloadEntry[]) {
     }));
 }
 
-function DownloadCard({ download, onRemove }: { download: DownloadEntry; onRemove: (id: number) => void }) {
+function DownloadCard({
+  download,
+  onRemove,
+  onAction
+}: {
+  download: DownloadEntry;
+  onRemove: (id: number) => void;
+  onAction: () => void;
+}) {
   const isDeleted = download.state === "completed" && !download.exists;
   const canOpen = download.state === "completed" && download.exists;
+  const isActive = download.state === "progressing";
+  const isPaused = download.state === "paused";
+  const canRetry = download.state === "cancelled" || download.state === "interrupted" || isDeleted;
+
+  const runAction = async (action: Promise<boolean>) => {
+    const ok = await action;
+    if (!ok) toast.error("Действие не удалось");
+    onAction();
+  };
 
   return (
     <li
@@ -112,9 +145,59 @@ function DownloadCard({ download, onRemove }: { download: DownloadEntry; onRemov
               <Progress value={progressValue(download)} className="h-1 w-28 bg-muted" />
             )}
           </div>
+          {download.state === "progressing" && (
+            <div className="mt-0.5 flex gap-2 text-[11px] text-muted-foreground/70">
+              {download.speedBytesPerSecond > 0 && <span>{formatSpeed(download.speedBytesPerSecond)}</span>}
+              {download.etaSeconds !== null && <span>{formatEta(download.etaSeconds)}</span>}
+            </div>
+          )}
           <div className="mt-0.5 truncate text-[11px] text-muted-foreground/70">{download.path}</div>
         </div>
       </button>
+      {isActive && (
+        <Button
+          variant="ghost"
+          size="icon"
+          className="size-8 shrink-0"
+          onClick={() => void runAction(flow.downloads.pause(download.id))}
+          aria-label="Поставить на паузу"
+        >
+          <Pause className="size-4" />
+        </Button>
+      )}
+      {isPaused && (
+        <Button
+          variant="ghost"
+          size="icon"
+          className="size-8 shrink-0"
+          onClick={() => void runAction(flow.downloads.resume(download.id))}
+          aria-label="Продолжить загрузку"
+        >
+          <Play className="size-4" />
+        </Button>
+      )}
+      {(isActive || isPaused) && (
+        <Button
+          variant="ghost"
+          size="icon"
+          className="size-8 shrink-0"
+          onClick={() => void runAction(flow.downloads.cancel(download.id))}
+          aria-label="Отменить загрузку"
+        >
+          <X className="size-4" />
+        </Button>
+      )}
+      {canRetry && (
+        <Button
+          variant="ghost"
+          size="icon"
+          className="size-8 shrink-0"
+          onClick={() => void runAction(flow.downloads.retry(download.id))}
+          aria-label="Скачать снова"
+        >
+          <RotateCcw className="size-4" />
+        </Button>
+      )}
       <Button
         variant="ghost"
         size="icon"
@@ -275,7 +358,12 @@ function DownloadsPage() {
               <CardContent className="p-1">
                 <ul>
                   {group.items.map((download) => (
-                    <DownloadCard key={download.id} download={download} onRemove={(id) => void remove(id)} />
+                    <DownloadCard
+                      key={download.id}
+                      download={download}
+                      onRemove={(id) => void remove(id)}
+                      onAction={invalidate}
+                    />
                   ))}
                 </ul>
               </CardContent>

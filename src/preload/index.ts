@@ -583,6 +583,18 @@ const downloadsAPI: FlowDownloadsAPI = {
   showInFolder: async (id: number) => {
     return ipcRenderer.invoke("downloads:show-in-folder", id);
   },
+  pause: async (id: number) => {
+    return ipcRenderer.invoke("downloads:pause", id);
+  },
+  resume: async (id: number) => {
+    return ipcRenderer.invoke("downloads:resume", id);
+  },
+  cancel: async (id: number) => {
+    return ipcRenderer.invoke("downloads:cancel", id);
+  },
+  retry: async (id: number) => {
+    return ipcRenderer.invoke("downloads:retry", id);
+  },
   remove: async (id: number) => {
     return ipcRenderer.invoke("downloads:remove", id);
   },

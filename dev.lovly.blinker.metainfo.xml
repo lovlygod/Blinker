@@ -59,6 +59,12 @@
   </requires>
 
   <releases>
+    <release version="1.13.2" date="2026-06-28">
+      <url type="details">https://github.com/lovlygod/Blinker/releases/tag/v1.13.2</url>
+      <description>
+        <p>Improved downloads with pause, resume, cancel, retry, speed, ETA, and multi-instance startup support.</p>
+      </description>
+    </release>
     <release version="0.13.1" date="2026-06-28">
       <url type="details">https://github.com/lovlygod/Blinker/releases/tag/v0.13.1</url>
       <description>

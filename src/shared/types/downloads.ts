@@ -1,4 +1,4 @@
-export type DownloadState = "progressing" | "completed" | "cancelled" | "interrupted";
+export type DownloadState = "progressing" | "paused" | "completed" | "cancelled" | "interrupted";
 
 export type DownloadEntry = {
   id: number;
@@ -12,10 +12,14 @@ export type DownloadEntry = {
   receivedBytes: number;
   state: DownloadState;
   dangerType: string | null;
+  errorMessage: string | null;
   startedAt: number;
   finishedAt: number | null;
   updatedAt: number;
   exists: boolean;
+  canResume: boolean;
+  speedBytesPerSecond: number;
+  etaSeconds: number | null;
 };
 
 export type DownloadsPageCursor = {

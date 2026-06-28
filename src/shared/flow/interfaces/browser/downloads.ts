@@ -6,6 +6,10 @@ export interface FlowDownloadsAPI {
   getSessionDownloads: () => Promise<DownloadEntry[]>;
   openFile: (id: number) => Promise<boolean>;
   showInFolder: (id: number) => Promise<boolean>;
+  pause: (id: number) => Promise<boolean>;
+  resume: (id: number) => Promise<boolean>;
+  cancel: (id: number) => Promise<boolean>;
+  retry: (id: number) => Promise<boolean>;
   remove: (id: number) => Promise<boolean>;
   clearAll: () => Promise<void>;
   getDownloadDirectory: () => Promise<string>;

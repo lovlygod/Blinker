@@ -23,12 +23,7 @@ function initializeApp() {
     app.commandLine.appendSwitch("disable-gpu");
   }
 
-  const gotTheLock = app.requestSingleInstanceLock();
-  debugPrint("INITIALIZATION", "gotTheLock", gotTheLock);
-
-  if (!gotTheLock) {
-    return false;
-  }
+  debugPrint("INITIALIZATION", "multiple app instances enabled");
 
   // Disable FedCM (Google One Tap, which doesn't work as the native prompt never shows in Electron)
   app.commandLine.appendSwitch("--disable-features", "FedCm");

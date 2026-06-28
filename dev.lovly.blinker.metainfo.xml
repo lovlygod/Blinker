@@ -59,6 +59,12 @@
   </requires>
 
   <releases>
+    <release version="0.13.1" date="2026-06-28">
+      <url type="details">https://github.com/lovlygod/Blinker/releases/tag/v0.13.1</url>
+      <description>
+        <p>Improved downloads UI, download history, and portable Windows packaging.</p>
+      </description>
+    </release>
     <release version="0.13.0" date="2026-06-25">
       <url type="details">https://github.com/lovlygod/Blinker/releases/tag/v0.13.0</url>
       <description>

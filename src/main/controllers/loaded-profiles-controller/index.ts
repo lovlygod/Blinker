@@ -8,6 +8,7 @@ import { setWindowSpace } from "@/ipc/session/spaces";
 import { ExtensionManager, getManifest } from "@/modules/extensions/management";
 import { translateManifestString } from "@/modules/extensions/locales";
 import { TypedEventEmitter } from "@/modules/typed-event-emitter";
+import { registerDownloadHandlingForSession } from "@/modules/downloads";
 import { getSettingValueById } from "@/saving/settings";
 import { dialog, BrowserWindow as ElectronBrowserWindow, Session } from "electron";
 import { ElectronChromeExtensions } from "electron-chrome-extensions";
@@ -107,6 +108,7 @@ class LoadedProfilesController extends TypedEventEmitter<LoadedProfilesControlle
 
     // Get the session for the profile
     const profileSession = sessionsController.get(profileId);
+    registerDownloadHandlingForSession(profileSession);
     this.loadedProfileSessions.add(profileSession);
 
     // Remove Electron and App details to closer emulate Chrome's User Agent

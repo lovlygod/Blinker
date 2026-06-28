@@ -5,6 +5,7 @@ import { getVersionUpdatedFrom, markUpdateStarted } from "@/saving/ephemeral";
 import { getSettingValueById, onSettingsCached, settingsEmitter } from "@/saving/settings";
 import { app } from "electron";
 import { autoUpdater, ProgressInfo, UpdateInfo, UpdateCheckResult } from "electron-updater";
+import path from "path";
 import { UpdateStatus } from "~/types/updates";
 
 // Mock Data //
@@ -48,6 +49,10 @@ export class AutoUpdateController extends TypedEventEmitter<AutoUpdateController
 
     // Flatpak updates are managed by the Flatpak runtime, not electron-updater
     if (process.env["FLATPAK_ID"]) return false;
+
+    if (platform === "win32" && app.getPath("exe").toLowerCase().includes(`${path.sep}win-unpacked`.toLowerCase())) {
+      return false;
+    }
 
     return SUPPORTED_PLATFORMS.includes(platform);
   }
@@ -214,8 +219,10 @@ export class AutoUpdateController extends TypedEventEmitter<AutoUpdateController
     }
 
     // Initial check for updates (works for both mock and real)
-    this.checkForUpdates();
-    setInterval(() => this.checkForUpdates(), 1000 * 60 * 15); // Check every 15 minutes
+    if (this.isAutoUpdateSupported(process.platform)) {
+      this.checkForUpdates();
+      setInterval(() => this.checkForUpdates(), 1000 * 60 * 15); // Check every 15 minutes
+    }
   }
 }
 

@@ -28,7 +28,11 @@ async function bootstrapBrowser() {
   tabPersistenceManager.start();
 
   // Load pinned tabs from database into memory (synchronous — better-sqlite3)
-  pinnedTabsController.loadAll();
+  try {
+    pinnedTabsController.loadAll();
+  } catch (error) {
+    console.error("Failed to load pinned tabs:", error);
+  }
 
   // Start cursor edge monitor (detects pointer near window edges for floating sidebar)
   initCursorEdgeMonitor();

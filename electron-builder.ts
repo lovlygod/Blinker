@@ -89,7 +89,7 @@ const electronBuilderConfig: Configuration = {
       role: "Viewer"
     }
   ],
-  asarUnpack: ["assets/**", "node_modules/@img/**"],
+  asarUnpack: ["assets/**", "node_modules/@img/**", "node_modules/better-sqlite3/**"],
   extraResources: [
     {
       from: "drizzle",

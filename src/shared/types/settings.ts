@@ -19,7 +19,12 @@ type SettingTypeEnum = {
   options: SettingTypeEnumOption[];
 };
 
-export type SettingType = SettingTypeBoolean | SettingTypeEnum;
+type SettingTypeString = {
+  type: "string";
+  defaultValue: string;
+};
+
+export type SettingType = SettingTypeBoolean | SettingTypeEnum | SettingTypeString;
 
 // Setting //
 export type BasicSetting = {

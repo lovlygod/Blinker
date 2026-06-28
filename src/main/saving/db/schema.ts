@@ -133,3 +133,32 @@ export const passwords = sqliteTable(
 
 export type PasswordRow = typeof passwords.$inferSelect;
 export type PasswordInsert = typeof passwords.$inferInsert;
+
+// --- Downloads ---
+
+export const downloads = sqliteTable(
+  "downloads",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    profileId: text("profile_id").notNull(),
+    url: text("url").notNull(),
+    referrer: text("referrer"),
+    filename: text("filename").notNull(),
+    mimeType: text("mime_type"),
+    path: text("path").notNull(),
+    totalBytes: integer("total_bytes").notNull().default(0),
+    receivedBytes: integer("received_bytes").notNull().default(0),
+    state: text("state").$type<"progressing" | "completed" | "cancelled" | "interrupted">().notNull(),
+    dangerType: text("danger_type"),
+    startedAt: integer("started_at").notNull(),
+    finishedAt: integer("finished_at"),
+    updatedAt: integer("updated_at").notNull()
+  },
+  (table) => [
+    index("idx_downloads_profile_id_started_at").on(table.profileId, table.startedAt),
+    index("idx_downloads_state").on(table.state)
+  ]
+);
+
+export type DownloadRow = typeof downloads.$inferSelect;
+export type DownloadInsert = typeof downloads.$inferInsert;

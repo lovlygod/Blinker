@@ -12,6 +12,7 @@ import { FlowOmniboxAPI } from "~/flow/interfaces/browser/omnibox";
 import { FlowNewTabAPI } from "~/flow/interfaces/browser/newTab";
 import { FlowFindInPageAPI } from "~/flow/interfaces/browser/find-in-page";
 import { FlowHistoryAPI } from "~/flow/interfaces/browser/history";
+import { FlowDownloadsAPI } from "~/flow/interfaces/browser/downloads";
 import { FlowPasskeyAPI } from "~/flow/interfaces/browser/passkey";
 import { FlowPromptsAPI } from "~/flow/interfaces/browser/prompts";
 
@@ -48,6 +49,7 @@ declare global {
     page: FlowPageAPI;
     navigation: FlowNavigationAPI;
     history: FlowHistoryAPI;
+    downloads: FlowDownloadsAPI;
     interface: FlowInterfaceAPI;
     passkey: FlowPasskeyAPI;
     omnibox: FlowOmniboxAPI;

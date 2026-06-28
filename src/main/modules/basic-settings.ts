@@ -128,6 +128,15 @@ export const BasicSettings: BasicSetting[] = [
     ]
   },
 
+  // [GENERAL] Download Directory
+  {
+    id: "downloadDirectory",
+    name: "Download folder",
+    showName: true,
+    type: "string",
+    defaultValue: ""
+  },
+
   // New Tab Mode
   {
     id: "newTabMode",
@@ -300,6 +309,7 @@ export const BasicSettingCards: BasicSettingCard[] = [
       "syncTabsAcrossWindows",
       "appLanguage",
       "defaultSearchEngine",
+      "downloadDirectory",
       "contentBlocker",
       "internal_setAsDefaultBrowser"
     ]

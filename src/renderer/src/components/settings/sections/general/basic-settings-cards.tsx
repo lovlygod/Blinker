@@ -9,12 +9,16 @@ import { UpdateCard } from "@/components/settings/sections/general/update-card";
 import { SetAsDefaultBrowserSetting } from "@/components/settings/sections/general/set-as-default-browser-setting";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { t } from "@/lib/i18n";
+import { Button } from "@/components/ui/button";
+import { FolderOpen, RotateCcw } from "lucide-react";
+import { useEffect, useState } from "react";
 
 const cardTranslationKeys: Record<string, { title: string; subtitle: string }> = {
-  "autoUpdate,syncTabsAcrossWindows,appLanguage,defaultSearchEngine,contentBlocker,internal_setAsDefaultBrowser": {
-    title: "card.general.title",
-    subtitle: "card.general.subtitle"
-  },
+  "autoUpdate,syncTabsAcrossWindows,appLanguage,defaultSearchEngine,downloadDirectory,contentBlocker,internal_setAsDefaultBrowser":
+    {
+      title: "card.general.title",
+      subtitle: "card.general.subtitle"
+    },
   newTabMode: {
     title: "card.newTab.title",
     subtitle: "card.newTab.subtitle"
@@ -58,12 +62,50 @@ function getCardLabels(card: BasicSettingCard) {
   return { title: t(keys.title), subtitle: t(keys.subtitle) };
 }
 
+function DownloadDirectoryInput() {
+  const [directory, setDirectory] = useState("");
+
+  const refresh = async () => {
+    setDirectory(await flow.downloads.getDownloadDirectory());
+  };
+
+  useEffect(() => {
+    void refresh();
+  }, []);
+
+  const choose = async () => {
+    const selected = await flow.downloads.chooseDownloadDirectory();
+    if (selected) setDirectory(selected);
+  };
+
+  const reset = async () => {
+    setDirectory(await flow.downloads.resetDownloadDirectory());
+  };
+
+  return (
+    <div className="flex min-w-0 items-center gap-2">
+      <span className="max-w-[260px] truncate text-xs text-muted-foreground">{directory}</span>
+      <Button variant="outline" size="sm" onClick={() => void choose()} className="gap-2">
+        <FolderOpen className="size-3.5" />
+        Choose
+      </Button>
+      <Button variant="ghost" size="icon" onClick={() => void reset()} aria-label="Reset downloads folder">
+        <RotateCcw className="size-3.5" />
+      </Button>
+    </div>
+  );
+}
+
 export function SettingsInput({ setting }: { setting: BasicSetting }) {
   const { getSetting, setSetting } = useSettings();
 
   const handleSettingChange = (value: BasicSetting["defaultValue"]) => {
     setSetting(setting.id, value);
   };
+
+  if (setting.id === "downloadDirectory") {
+    return <DownloadDirectoryInput />;
+  }
 
   if (setting.type === "enum") {
     const settingValue = getSetting<string>(setting.id);

@@ -34,6 +34,7 @@ export type PasswordSaveCandidate = {
   username: string;
   password: string;
   title?: string;
+  isUpdate?: boolean;
 };
 
 export type PasswordImportResult = {

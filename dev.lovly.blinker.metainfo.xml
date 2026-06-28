@@ -59,6 +59,12 @@
   </requires>
 
   <releases>
+    <release version="1.14.0" date="2026-06-28">
+      <url type="details">https://github.com/lovlygod/Blinker/releases/tag/v1.14.0</url>
+      <description>
+        <p>Added Chrome-like password autofill suggestions and fixed downloads preview state and styling.</p>
+      </description>
+    </release>
     <release version="1.13.3" date="2026-06-28">
       <url type="details">https://github.com/lovlygod/Blinker/releases/tag/v1.13.3</url>
       <description>

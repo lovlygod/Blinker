@@ -83,7 +83,7 @@ function JavaScriptDialogCard({ prompt }: { prompt: JsDialogActivePrompt }) {
   return (
     <Card
       ref={cardRef}
-      className={cn("w-full max-w-md select-none gap-5", "border border-white/25", "shadow-2xl shadow-black/40")}
+      className={cn("w-full max-w-md select-none gap-5", "border border-border/60", "shadow-2xl shadow-black/35")}
     >
       <CardHeader>
         <CardTitle>{t("prompt.says", { site: promptOrigin(prompt.originUrl) })}</CardTitle>
@@ -251,13 +251,15 @@ function SavePasswordCard({ prompt }: { prompt: SavePasswordActivePrompt }) {
       className={cn("w-full max-w-md select-none gap-5", "border border-white/25", "shadow-2xl shadow-black/40")}
     >
       <CardHeader>
-        <CardTitle>{t("prompt.savePassword")}</CardTitle>
+        <CardTitle>{t(prompt.candidate.isUpdate ? "prompt.updatePassword" : "prompt.savePassword")}</CardTitle>
       </CardHeader>
       <CardContent>
         <FieldGroup className="gap-4">
           <Field>
             <FieldLabel className="text-muted-foreground">
-              {t("prompt.savePasswordFor", { site: originLabel })}
+              {t(prompt.candidate.isUpdate ? "prompt.updatePasswordFor" : "prompt.savePasswordFor", {
+                site: originLabel
+              })}
             </FieldLabel>
           </Field>
           <Field>
@@ -278,7 +280,7 @@ function SavePasswordCard({ prompt }: { prompt: SavePasswordActivePrompt }) {
           {t("action.notNow")}
         </Button>
         <Button variant="default" className="flex-1" onClick={save}>
-          {t("action.save")}
+          {t(prompt.candidate.isUpdate ? "action.update" : "action.save")}
           <span className="text-xs text-muted">↵</span>
         </Button>
       </CardFooter>

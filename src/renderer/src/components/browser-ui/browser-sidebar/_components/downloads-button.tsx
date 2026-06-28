@@ -220,6 +220,7 @@ export function DownloadsButton() {
   const [isAnimating, setIsAnimating] = useState(false);
   const [isButtonPulsing, setIsButtonPulsing] = useState(false);
   const buttonAnchorRef = useRef<HTMLDivElement>(null);
+  const popoverContentRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     void flow.downloads.getSessionDownloads().then(setDownloads);
@@ -239,6 +240,21 @@ export function DownloadsButton() {
       unsubscribeCreated();
     };
   }, []);
+
+  useEffect(() => {
+    if (!open) return;
+
+    const handlePointerDown = (event: PointerEvent) => {
+      const target = event.target;
+      if (!(target instanceof Node)) return;
+      if (buttonAnchorRef.current?.contains(target)) return;
+      if (popoverContentRef.current?.contains(target)) return;
+      setOpen(false);
+    };
+
+    window.addEventListener("pointerdown", handlePointerDown, true);
+    return () => window.removeEventListener("pointerdown", handlePointerDown, true);
+  }, [open]);
 
   const visibleDownloads = useMemo(() => downloads.slice(0, 5), [downloads]);
   const hasSessionDownloads = visibleDownloads.length > 0;
@@ -264,14 +280,14 @@ export function DownloadsButton() {
       <motion.div
         animate={isButtonPulsing ? { scale: [1, 1.18, 0.96, 1] } : { scale: 1 }}
         transition={{ duration: 0.58, ease: [0.16, 1, 0.3, 1] }}
-        className="relative"
+        className="relative flex size-8 items-center justify-center"
       >
         <AnimatePresence>
           {(isButtonPulsing || activeDownloads.length > 0) && (
             <motion.span
-              className="pointer-events-none absolute inset-0 rounded-lg border border-primary/55 shadow-[0_0_22px_hsl(var(--primary)/0.42)]"
+              className="pointer-events-none absolute inset-0 rounded-lg border border-primary/45 shadow-[0_0_18px_hsl(var(--primary)/0.36)]"
               initial={{ scale: 0.72, opacity: 0 }}
-              animate={{ scale: [0.72, 1.36], opacity: [0, 0.9, 0] }}
+              animate={{ scale: [0.72, 1.22], opacity: [0, 0.75, 0] }}
               exit={{ opacity: 0, scale: 1.15 }}
               transition={{ duration: 0.9, ease: "easeOut", repeat: activeDownloads.length > 0 ? Infinity : 0 }}
             />
@@ -285,7 +301,11 @@ export function DownloadsButton() {
         >
           <DownloadIcon strokeWidth={2} className="h-4 w-4 text-black/80 dark:text-white/80" />
           {activeDownloads.length > 0 && (
-            <svg className="pointer-events-none absolute inset-0 h-8 w-8 -rotate-90" viewBox="0 0 32 32" aria-hidden>
+            <svg
+              className="pointer-events-none absolute left-1/2 top-1/2 h-7 w-7 -translate-x-1/2 -translate-y-1/2 -rotate-90"
+              viewBox="0 0 32 32"
+              aria-hidden
+            >
               <circle
                 cx="16"
                 cy="16"
@@ -325,10 +345,11 @@ export function DownloadsButton() {
         side="top"
         align="end"
         sideOffset={10}
-        className="z-[10000] w-[380px] overflow-hidden border border-white/10 bg-zinc-950/95 p-2 text-white shadow-2xl backdrop-blur-xl"
+        className="z-[10000] w-[380px] overflow-hidden border border-border/60 bg-popover/95 p-2 text-popover-foreground shadow-2xl shadow-black/35 backdrop-blur-xl"
         arrow={false}
       >
         <motion.div
+          ref={popoverContentRef}
           initial={{ opacity: 0, y: 10, scale: 0.96 }}
           animate={{ opacity: 1, y: 0, scale: 1 }}
           exit={{ opacity: 0, y: 6, scale: 0.97 }}

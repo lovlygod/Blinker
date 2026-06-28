@@ -65,6 +65,22 @@ export function getSessionDownloads(): DownloadEntry[] {
   return rows.sort((a, b) => b.startedAt - a.startedAt).slice(0, 5);
 }
 
+export function forgetSessionDownload(id: number) {
+  sessionDownloadIds.delete(id);
+  activeDownloads.delete(id);
+  emitDownloadsChanged();
+}
+
+export function forgetSessionDownloadsForProfile(profileId: string) {
+  for (const id of [...sessionDownloadIds]) {
+    if (getDownloadByIdForProfile(profileId, id)) {
+      sessionDownloadIds.delete(id);
+      activeDownloads.delete(id);
+    }
+  }
+  emitDownloadsChanged();
+}
+
 export function enrichDownload(entry: DownloadEntry): DownloadEntry {
   const active = activeDownloads.get(entry.id);
   if (!active) return entry;

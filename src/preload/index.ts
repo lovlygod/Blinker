@@ -132,9 +132,23 @@ function installPasswordAutofillBridge() {
   contextBridge.executeInMainWorld({
     func: () => {
       type FlowCredential = {
+        id: number;
         username: string;
         password: string;
+        title?: string;
+        origin?: string;
       };
+
+      type LoginFieldPair = {
+        form: HTMLFormElement | null;
+        usernameField: HTMLInputElement | null;
+        passwordField: HTMLInputElement;
+      };
+
+      let credentialsCache: FlowCredential[] | null = null;
+      let popupHost: HTMLDivElement | null = null;
+      let lastCapturedKey = "";
+      let lastCapturedAt = 0;
 
       const requestAutofill = () =>
         new Promise<FlowCredential[]>((resolve) => {
@@ -167,9 +181,9 @@ function installPasswordAutofillBridge() {
 
       const textInputTypes = new Set(["", "text", "email", "tel", "url", "search"]);
 
-      function findLoginFields(root: ParentNode = document) {
+      function findLoginFields(root: ParentNode = document): LoginFieldPair[] {
         const passwordFields = Array.from(root.querySelectorAll<HTMLInputElement>('input[type="password"]')).filter(
-          (input) => !input.disabled && !input.readOnly
+          (input) => !input.disabled && !input.readOnly && input.offsetParent !== null
         );
 
         return passwordFields.map((passwordField) => {
@@ -177,12 +191,18 @@ function installPasswordAutofillBridge() {
           const scope: ParentNode = form ?? document;
           const candidates = Array.from(scope.querySelectorAll<HTMLInputElement>("input")).filter((input) => {
             const type = input.type.toLowerCase();
-            return input !== passwordField && textInputTypes.has(type) && !input.disabled && !input.readOnly;
+            return (
+              input !== passwordField &&
+              textInputTypes.has(type) &&
+              !input.disabled &&
+              !input.readOnly &&
+              input.offsetParent !== null
+            );
           });
 
           const usernameField =
             candidates.find((input) =>
-              /user|email|login|name|account/i.test(`${input.name} ${input.id} ${input.autocomplete}`)
+              /user|email|login|name|account|phone/i.test(`${input.name} ${input.id} ${input.autocomplete}`)
             ) ??
             candidates
               .filter((input) => {
@@ -204,23 +224,168 @@ function installPasswordAutofillBridge() {
         input.dispatchEvent(new Event("change", { bubbles: true }));
       }
 
-      async function fillNearest(target: EventTarget | null) {
-        if (!(target instanceof HTMLInputElement)) return;
-        const fields = findLoginFields();
-        const match = fields.find(
-          ({ usernameField, passwordField }) => target === usernameField || target === passwordField
+      function pairForTarget(target: EventTarget | null) {
+        if (!(target instanceof HTMLInputElement)) return null;
+        return (
+          findLoginFields().find(
+            ({ usernameField, passwordField }) => target === usernameField || target === passwordField
+          ) ?? null
         );
-        if (!match || match.passwordField.value) return;
+      }
 
-        const [credential] = await requestAutofill();
-        if (!credential) return;
+      function ensurePopup() {
+        if (popupHost) return popupHost;
 
-        if (match.usernameField && !match.usernameField.value) {
-          setNativeValue(match.usernameField, credential.username);
+        popupHost = document.createElement("div");
+        popupHost.style.position = "fixed";
+        popupHost.style.zIndex = "2147483647";
+        popupHost.style.display = "none";
+        popupHost.style.pointerEvents = "auto";
+        popupHost.style.colorScheme = "dark";
+
+        const shadow = popupHost.attachShadow({ mode: "open" });
+        const style = document.createElement("style");
+        style.textContent = `
+          :host { all: initial; }
+          .box {
+            min-width: 240px;
+            max-width: min(360px, calc(100vw - 24px));
+            overflow: hidden;
+            border: 1px solid rgba(255,255,255,.12);
+            border-radius: 10px;
+            background: rgba(18,18,22,.96);
+            box-shadow: 0 18px 48px rgba(0,0,0,.42);
+            color: white;
+            font: 13px system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+            backdrop-filter: blur(18px);
+          }
+          .title {
+            padding: 9px 11px 7px;
+            color: rgba(255,255,255,.58);
+            font-size: 11px;
+            font-weight: 650;
+            letter-spacing: .02em;
+          }
+          button {
+            all: unset;
+            box-sizing: border-box;
+            width: 100%;
+            display: grid;
+            grid-template-columns: 30px minmax(0, 1fr);
+            gap: 10px;
+            align-items: center;
+            padding: 9px 11px;
+            cursor: default;
+          }
+          button:hover, button[data-active="true"] { background: rgba(255,255,255,.08); }
+          .icon {
+            width: 28px;
+            height: 28px;
+            display: grid;
+            place-items: center;
+            border-radius: 8px;
+            background: rgba(255,255,255,.08);
+            color: hsl(270 90% 72%);
+            font-size: 15px;
+          }
+          .name {
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            font-weight: 650;
+          }
+          .origin {
+            margin-top: 2px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            color: rgba(255,255,255,.55);
+            font-size: 11px;
+          }
+        `;
+        const box = document.createElement("div");
+        box.className = "box";
+        shadow.append(style, box);
+        document.documentElement.appendChild(popupHost);
+        return popupHost;
+      }
+
+      function hidePopup() {
+        if (popupHost) popupHost.style.display = "none";
+      }
+
+      function positionPopup(anchor: HTMLInputElement) {
+        if (!popupHost) return;
+        const rect = anchor.getBoundingClientRect();
+        const width = Math.max(240, Math.min(360, rect.width));
+        const left = Math.min(Math.max(8, rect.left), window.innerWidth - width - 8);
+        const top = rect.bottom + 6 + 280 > window.innerHeight ? Math.max(8, rect.top - 286) : rect.bottom + 6;
+        popupHost.style.left = `${left}px`;
+        popupHost.style.top = `${top}px`;
+        popupHost.style.width = `${width}px`;
+      }
+
+      function fillCredential(pair: LoginFieldPair, credential: FlowCredential) {
+        if (pair.usernameField) {
+          setNativeValue(pair.usernameField, credential.username);
         }
-        if (!match.passwordField.value) {
-          setNativeValue(match.passwordField, credential.password);
+        setNativeValue(pair.passwordField, credential.password);
+        hidePopup();
+        pair.passwordField.focus();
+      }
+
+      function renderPopup(pair: LoginFieldPair, credentials: FlowCredential[], anchor: HTMLInputElement) {
+        const host = ensurePopup();
+        const shadow = host.shadowRoot;
+        if (!shadow) return;
+        const box = shadow.querySelector<HTMLDivElement>(".box");
+        if (!box) return;
+
+        box.replaceChildren();
+        const title = document.createElement("div");
+        title.className = "title";
+        title.textContent = "Сохранённые логины";
+        box.appendChild(title);
+
+        for (const credential of credentials.slice(0, 6)) {
+          const button = document.createElement("button");
+          button.type = "button";
+          button.innerHTML = `
+            <span class="icon">key</span>
+            <span>
+              <span class="name"></span>
+              <span class="origin"></span>
+            </span>
+          `;
+          button.querySelector(".name")!.textContent = credential.username;
+          button.querySelector(".origin")!.textContent = credential.title || credential.origin || location.hostname;
+          button.addEventListener("pointerdown", (event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            fillCredential(pair, credential);
+          });
+          box.appendChild(button);
         }
+
+        positionPopup(anchor);
+        host.style.display = "block";
+      }
+
+      async function showAutofillFor(target: EventTarget | null) {
+        const pair = pairForTarget(target);
+        if (!pair) {
+          hidePopup();
+          return;
+        }
+
+        const anchor = target instanceof HTMLInputElement ? target : (pair.usernameField ?? pair.passwordField);
+        credentialsCache ??= await requestAutofill();
+        if (credentialsCache.length === 0) {
+          hidePopup();
+          return;
+        }
+
+        renderPopup(pair, credentialsCache, anchor);
       }
 
       function captureCandidate(form: HTMLFormElement | null, target?: EventTarget | null) {
@@ -234,6 +399,12 @@ function installPasswordAutofillBridge() {
         const username = match.usernameField?.value.trim() ?? "";
         const password = match.passwordField.value;
         if (!username || !password) return;
+
+        const key = `${location.origin}:${username}:${password}`;
+        const now = Date.now();
+        if (key === lastCapturedKey && now - lastCapturedAt < 3000) return;
+        lastCapturedKey = key;
+        lastCapturedAt = now;
 
         window.postMessage(
           {
@@ -251,7 +422,20 @@ function installPasswordAutofillBridge() {
         );
       }
 
-      document.addEventListener("focusin", (event) => void fillNearest(event.target), true);
+      document.addEventListener("focusin", (event) => void showAutofillFor(event.target), true);
+      document.addEventListener("click", (event) => void showAutofillFor(event.target), true);
+      document.addEventListener(
+        "pointerdown",
+        (event) => {
+          const target = event.target;
+          if (popupHost?.contains(target as Node)) return;
+          if (pairForTarget(target)) return;
+          hidePopup();
+        },
+        true
+      );
+      window.addEventListener("scroll", hidePopup, true);
+      window.addEventListener("resize", hidePopup);
       document.addEventListener(
         "submit",
         (event) => {
@@ -262,6 +446,7 @@ function installPasswordAutofillBridge() {
       document.addEventListener(
         "keydown",
         (event) => {
+          if (event.key === "Escape") hidePopup();
           if (event.key === "Enter") {
             captureCandidate((event.target as HTMLInputElement | null)?.form ?? null, event.target);
           }

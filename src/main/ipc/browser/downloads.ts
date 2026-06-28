@@ -2,6 +2,8 @@ import { browserWindowsController } from "@/controllers/windows-controller/inter
 import { spacesController } from "@/controllers/spaces-controller";
 import {
   chooseDownloadDirectory,
+  forgetSessionDownload,
+  forgetSessionDownloadsForProfile,
   getDownloadDirectory,
   getSessionDownloads,
   openDownloadedFile,
@@ -105,12 +107,15 @@ ipcMain.handle("downloads:retry", async (event, id: number) => {
 ipcMain.handle("downloads:remove", async (event, id: number) => {
   const profileId = await profileIdFromSender(event.sender);
   if (!profileId) return false;
-  return removeDownloadForProfile(profileId, id);
+  const removed = removeDownloadForProfile(profileId, id);
+  if (removed) forgetSessionDownload(id);
+  return removed;
 });
 
 ipcMain.handle("downloads:clear-all", async (event) => {
   const profileId = await profileIdFromSender(event.sender);
   if (!profileId) return;
+  forgetSessionDownloadsForProfile(profileId);
   clearDownloadsForProfile(profileId);
 });
 

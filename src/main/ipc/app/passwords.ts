@@ -64,7 +64,7 @@ ipcMain.handle("passwords:import-csv", async (_event, profileId: string) => {
 ipcMain.handle("passwords:export-csv", async (_event, profileId: string) => {
   const result = await dialog.showSaveDialog({
     title: "Экспорт паролей",
-    defaultPath: "flow-passwords.csv",
+    defaultPath: "blinker-passwords.csv",
     filters: [{ name: "CSV files", extensions: ["csv"] }]
   });
 
@@ -90,6 +90,9 @@ ipcMain.handle("passwords:capture-save-candidate", async (event, candidate: Pass
     return true;
   }
 
+  const isUpdate = listPasswordAutofillForUrl(tab.profileId, candidate.url).some(
+    (entry) => entry.username === candidate.username.trim()
+  );
   const { promise, resolve } = Promise.withResolvers<PromptResult<"save" | "never" | null>>();
   const origin = originFromUrl(candidate.url) ?? candidate.url;
   const state: PromptState = {
@@ -100,7 +103,8 @@ ipcMain.handle("passwords:capture-save-candidate", async (event, candidate: Pass
     suppressionKey: `save-password:${tab.profileId}:${origin}:${candidate.username.trim()}`,
     candidate: {
       ...candidate,
-      username: candidate.username.trim()
+      username: candidate.username.trim(),
+      isUpdate
     },
     promise,
     resolver: resolve

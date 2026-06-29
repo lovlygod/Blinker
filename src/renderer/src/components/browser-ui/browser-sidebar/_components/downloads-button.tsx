@@ -2,13 +2,14 @@ import { type RefObject, useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import { Check, DownloadIcon, File, FolderOpen, Loader2, Pause, Play, RotateCcw, SearchX, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/portal/popover";
 import { PortalComponent } from "@/components/portal/portal";
 import { Progress } from "@/components/ui/progress";
 import { cn } from "@/lib/utils";
 import type { DownloadEntry } from "~/types/downloads";
 
 const DOWNLOAD_ANIMATION_DURATION_MS = 1000;
+const PANEL_WIDTH = 380;
+const PANEL_HEIGHT = 260;
 
 function progressValue(download: DownloadEntry) {
   if (download.state === "completed") return 100;
@@ -219,8 +220,18 @@ export function DownloadsButton() {
   const [animationKey, setAnimationKey] = useState(0);
   const [isAnimating, setIsAnimating] = useState(false);
   const [isButtonPulsing, setIsButtonPulsing] = useState(false);
+  const [previewDismissed, setPreviewDismissed] = useState(false);
+  const [panelPosition, setPanelPosition] = useState({ left: 48, top: 520 });
   const buttonAnchorRef = useRef<HTMLDivElement>(null);
   const popoverContentRef = useRef<HTMLDivElement>(null);
+
+  const updatePanelPosition = () => {
+    const rect = buttonAnchorRef.current?.getBoundingClientRect();
+    if (!rect) return;
+    const left = Math.min(Math.max(8, rect.right + 10), window.innerWidth - PANEL_WIDTH - 8);
+    const top = Math.min(Math.max(8, rect.bottom - PANEL_HEIGHT), window.innerHeight - PANEL_HEIGHT - 8);
+    setPanelPosition({ left, top });
+  };
 
   useEffect(() => {
     void flow.downloads.getSessionDownloads().then(setDownloads);
@@ -231,7 +242,10 @@ export function DownloadsButton() {
       setAnimationKey((value) => value + 1);
       setIsAnimating(true);
       setIsButtonPulsing(true);
-      setOpen(true);
+      if (!previewDismissed) {
+        updatePanelPosition();
+        setOpen(true);
+      }
 
       window.setTimeout(() => setIsButtonPulsing(false), DOWNLOAD_ANIMATION_DURATION_MS + 220);
     });
@@ -239,7 +253,7 @@ export function DownloadsButton() {
       unsubscribeChanged();
       unsubscribeCreated();
     };
-  }, []);
+  }, [previewDismissed]);
 
   useEffect(() => {
     if (!open) return;
@@ -249,23 +263,28 @@ export function DownloadsButton() {
       if (!(target instanceof Node)) return;
       if (buttonAnchorRef.current?.contains(target)) return;
       if (popoverContentRef.current?.contains(target)) return;
+      setPreviewDismissed(true);
       setOpen(false);
     };
+    const handleLayoutChange = () => updatePanelPosition();
 
     window.addEventListener("pointerdown", handlePointerDown, true);
-    return () => window.removeEventListener("pointerdown", handlePointerDown, true);
+    window.addEventListener("resize", handleLayoutChange);
+    window.addEventListener("scroll", handleLayoutChange, true);
+    return () => {
+      window.removeEventListener("pointerdown", handlePointerDown, true);
+      window.removeEventListener("resize", handleLayoutChange);
+      window.removeEventListener("scroll", handleLayoutChange, true);
+    };
   }, [open]);
 
   const visibleDownloads = useMemo(() => downloads.slice(0, 5), [downloads]);
   const hasSessionDownloads = visibleDownloads.length > 0;
   const activeDownloads = visibleDownloads.filter((download) => download.state === "progressing");
-  const activeProgress =
-    activeDownloads.length > 0
-      ? activeDownloads.reduce((total, download) => total + progressValue(download), 0) / activeDownloads.length
-      : 0;
 
   const openDownloadsPage = () => {
     void flow.tabs.newTab("blinker://downloads", true);
+    setPreviewDismissed(true);
     setOpen(false);
   };
 
@@ -296,41 +315,18 @@ export function DownloadsButton() {
         <Button
           size="icon"
           className="relative size-8 bg-transparent hover:bg-black/10 dark:hover:bg-white/10"
-          onClick={hasSessionDownloads ? undefined : openDownloadsPage}
+          onClick={
+            hasSessionDownloads
+              ? () => {
+                  updatePanelPosition();
+                  setPreviewDismissed(false);
+                  setOpen((current) => !current);
+                }
+              : openDownloadsPage
+          }
           aria-label="Загрузки"
         >
           <DownloadIcon strokeWidth={2} className="h-4 w-4 text-black/80 dark:text-white/80" />
-          {activeDownloads.length > 0 && (
-            <svg
-              className="pointer-events-none absolute left-1/2 top-1/2 h-7 w-7 -translate-x-1/2 -translate-y-1/2 -rotate-90"
-              viewBox="0 0 32 32"
-              aria-hidden
-            >
-              <circle
-                cx="16"
-                cy="16"
-                r="13.5"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                className="text-white/12"
-              />
-              <motion.circle
-                cx="16"
-                cy="16"
-                r="13.5"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                className="text-primary"
-                pathLength={100}
-                initial={false}
-                animate={{ strokeDasharray: "100 100", strokeDashoffset: 100 - activeProgress }}
-                transition={{ duration: 0.18, ease: "easeOut" }}
-              />
-            </svg>
-          )}
         </Button>
       </motion.div>
     </div>
@@ -339,17 +335,13 @@ export function DownloadsButton() {
   if (!hasSessionDownloads) return button;
 
   return (
-    <Popover open={open} onOpenChange={(next) => setOpen(next)}>
-      <PopoverTrigger render={button} />
-      <PopoverContent
-        side="top"
-        align="end"
-        sideOffset={10}
-        className="z-[10000] w-[380px] overflow-hidden border border-border/60 bg-popover/95 p-2 text-popover-foreground shadow-2xl shadow-black/35 backdrop-blur-xl"
-        arrow={false}
-      >
+    <>
+      {button}
+      <PortalComponent visible={open} layerType="popover" className="pointer-events-none fixed inset-0 z-[10000]">
         <motion.div
           ref={popoverContentRef}
+          className="pointer-events-auto fixed w-[380px] overflow-hidden rounded-xl border border-white/10 bg-zinc-950/95 p-2 text-white shadow-2xl shadow-black/35 backdrop-blur-xl"
+          style={{ left: panelPosition.left, top: panelPosition.top }}
           initial={{ opacity: 0, y: 10, scale: 0.96 }}
           animate={{ opacity: 1, y: 0, scale: 1 }}
           exit={{ opacity: 0, y: 6, scale: 0.97 }}
@@ -379,7 +371,7 @@ export function DownloadsButton() {
             </AnimatePresence>
           </div>
         </motion.div>
-      </PopoverContent>
-    </Popover>
+      </PortalComponent>
+    </>
   );
 }

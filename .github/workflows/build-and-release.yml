@@ -105,16 +105,14 @@ jobs:
 
       - name: Build for Linux
         if: matrix.os == 'ubuntu-latest' || matrix.os == 'ubuntu-24.04-arm'
-        run: bun run build:linux -p always
+        run: bun run build:linux -p never
         env:
           USE_SYSTEM_FPM: ${{ matrix.os == 'ubuntu-24.04-arm' }}
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Build for macOS
         if: matrix.os == 'macos-latest' || matrix.os == 'macos-15-intel'
-        run: bun run build:mac -p always
+        run: bun run build:mac -p never
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           CSC_LINK: ${{ secrets.CSC_LINK }}
           CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
           APPLE_API_KEY_DATA: ${{ secrets.APPLE_API_KEY_DATA }}
@@ -123,9 +121,34 @@ jobs:
 
       - name: Build for Windows
         if: matrix.os == 'windows-latest'
-        run: bun run build:win -p always
+        run: bun run build:win -p never
+
+      - name: Upload Release Assets
+        shell: bash
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          release_tag="${GITHUB_REF_NAME}"
+          if [ "${GITHUB_EVENT_NAME}" = "release" ]; then
+            release_tag="${{ github.event.release.tag_name }}"
+          fi
+          files=(
+            dist/*.exe
+            dist/*.zip
+            dist/*.dmg
+            dist/*.AppImage
+            dist/*.deb
+            dist/*.rpm
+            dist/*.tar.gz
+            dist/*.yml
+            dist/*.blockmap
+            dist/*.flatpak
+          )
+          if [ "${#files[@]}" -gt 0 ]; then
+            gh release upload "$release_tag" "${files[@]}" --clobber
+          fi
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Upload Build Artifacts
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2

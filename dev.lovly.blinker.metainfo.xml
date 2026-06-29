@@ -59,6 +59,12 @@
   </requires>
 
   <releases>
+    <release version="1.14.2" date="2026-06-29">
+      <url type="details">https://github.com/lovlygod/Blinker/releases/tag/v1.14.2</url>
+      <description>
+        <p>Fixed GitHub release creation before uploading build assets.</p>
+      </description>
+    </release>
     <release version="1.14.1" date="2026-06-29">
       <url type="details">https://github.com/lovlygod/Blinker/releases/tag/v1.14.1</url>
       <description>

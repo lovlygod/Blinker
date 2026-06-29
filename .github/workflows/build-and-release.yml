@@ -132,6 +132,9 @@ jobs:
           if [ "${GITHUB_EVENT_NAME}" = "release" ]; then
             release_tag="${{ github.event.release.tag_name }}"
           fi
+          gh release view "$release_tag" >/dev/null 2>&1 || \
+            gh release create "$release_tag" --title "Blinker ${release_tag}" --notes "Blinker ${release_tag}" || \
+            gh release view "$release_tag" >/dev/null
           files=(
             dist/*.exe
             dist/*.zip

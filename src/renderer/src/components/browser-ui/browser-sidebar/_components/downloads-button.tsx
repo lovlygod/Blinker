@@ -267,15 +267,21 @@ export function DownloadsButton() {
   useEffect(() => {
     if (!open) return;
 
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
-        closePreview();
-      }
+    const handlePointerDown = (event: PointerEvent) => {
+      const target = event.target;
+      if (target instanceof Node && buttonAnchorRef.current?.contains(target)) return;
+      closePreview();
     };
 
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") closePreview();
+    };
+
+    window.addEventListener("pointerdown", handlePointerDown, true);
     window.addEventListener("keydown", handleKeyDown);
     window.addEventListener("blur", closePreview);
     return () => {
+      window.removeEventListener("pointerdown", handlePointerDown, true);
       window.removeEventListener("keydown", handleKeyDown);
       window.removeEventListener("blur", closePreview);
     };
@@ -337,13 +343,7 @@ export function DownloadsButton() {
         <Button
           size="icon"
           className="relative size-8 bg-transparent hover:bg-black/10 dark:hover:bg-white/10"
-          onClick={
-            hasSessionDownloads
-              ? () => {
-                  setOpen((current) => !current);
-                }
-              : openDownloadsPage
-          }
+          onClick={hasSessionDownloads ? () => setOpen((current) => !current) : openDownloadsPage}
           aria-label="Загрузки"
         >
           <DownloadIcon strokeWidth={2} className="h-4 w-4 text-black/80 dark:text-white/80" />
@@ -357,16 +357,20 @@ export function DownloadsButton() {
   return (
     <>
       {button}
-      <PortalComponent visible={open} layerType="popover" className="pointer-events-auto fixed inset-0 z-[10000]">
-        <button
-          type="button"
-          aria-label="Закрыть загрузки"
-          className="fixed inset-0 cursor-default bg-transparent"
-          onPointerDown={closePreview}
-        />
+      <PortalComponent
+        visible={open}
+        autoFocus
+        layerType="popover"
+        className="pointer-events-none fixed z-[10000]"
+        style={{
+          left: panelPosition.left,
+          top: panelPosition.top,
+          width: PANEL_WIDTH,
+          height: PANEL_HEIGHT
+        }}
+      >
         <motion.div
-          className="pointer-events-auto fixed w-[380px] overflow-hidden rounded-xl border border-white/10 bg-zinc-950/95 p-2 text-white shadow-2xl shadow-black/35 backdrop-blur-xl"
-          style={{ left: panelPosition.left, top: panelPosition.top }}
+          className="pointer-events-auto h-full w-full overflow-hidden rounded-xl border border-white/10 bg-zinc-950/95 p-2 text-white shadow-2xl shadow-black/35 backdrop-blur-xl"
           initial={{ opacity: 0, y: 10, scale: 0.96 }}
           animate={{ opacity: 1, y: 0, scale: 1 }}
           exit={{ opacity: 0, y: 6, scale: 0.97 }}

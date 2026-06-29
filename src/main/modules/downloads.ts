@@ -103,7 +103,7 @@ export function enrichDownload(entry: DownloadEntry): DownloadEntry {
   };
 }
 
-function getDownloadByIdAnyProfile(id: number): DownloadEntry | null {
+export function getDownloadByIdAnyProfile(id: number): DownloadEntry | null {
   for (const window of browserWindowsController.getWindows()) {
     const spaceId = window.currentSpaceId;
     const profileId = spaceId ? spacesController.getFromCache(spaceId)?.profileId : undefined;

@@ -10,6 +10,7 @@ import {
   pauseDownload,
   cancelDownload,
   enrichDownload,
+  getDownloadByIdAnyProfile,
   resumeDownload,
   resetDownloadDirectory,
   retryDownload,
@@ -36,6 +37,10 @@ async function profileIdFromSender(sender: Electron.WebContents): Promise<string
   return space?.profileId ?? "default";
 }
 
+function getDownloadForSender(profileId: string | null, id: number) {
+  return (profileId ? getDownloadByIdForProfile(profileId, id) : null) ?? getDownloadByIdAnyProfile(id);
+}
+
 ipcMain.handle("downloads:list-recent", async (event, limit?: number) => {
   const profileId = await profileIdFromSender(event.sender);
   if (!profileId) return [];
@@ -58,48 +63,42 @@ ipcMain.handle("downloads:get-session", () => {
 
 ipcMain.handle("downloads:open-file", async (event, id: number) => {
   const profileId = await profileIdFromSender(event.sender);
-  if (!profileId) return false;
-  const entry = getDownloadByIdForProfile(profileId, id);
+  const entry = getDownloadForSender(profileId, id);
   if (!entry) return false;
   return openDownloadedFile(entry);
 });
 
 ipcMain.handle("downloads:show-in-folder", async (event, id: number) => {
   const profileId = await profileIdFromSender(event.sender);
-  if (!profileId) return false;
-  const entry = getDownloadByIdForProfile(profileId, id);
+  const entry = getDownloadForSender(profileId, id);
   if (!entry) return false;
   return showDownloadedFileInFolder(entry);
 });
 
 ipcMain.handle("downloads:pause", async (event, id: number) => {
   const profileId = await profileIdFromSender(event.sender);
-  if (!profileId) return false;
-  const entry = getDownloadByIdForProfile(profileId, id);
+  const entry = getDownloadForSender(profileId, id);
   if (!entry) return false;
   return pauseDownload(entry);
 });
 
 ipcMain.handle("downloads:resume", async (event, id: number) => {
   const profileId = await profileIdFromSender(event.sender);
-  if (!profileId) return false;
-  const entry = getDownloadByIdForProfile(profileId, id);
+  const entry = getDownloadForSender(profileId, id);
   if (!entry) return false;
   return resumeDownload(entry);
 });
 
 ipcMain.handle("downloads:cancel", async (event, id: number) => {
   const profileId = await profileIdFromSender(event.sender);
-  if (!profileId) return false;
-  const entry = getDownloadByIdForProfile(profileId, id);
+  const entry = getDownloadForSender(profileId, id);
   if (!entry) return false;
   return cancelDownload(entry);
 });
 
 ipcMain.handle("downloads:retry", async (event, id: number) => {
   const profileId = await profileIdFromSender(event.sender);
-  if (!profileId) return false;
-  const entry = getDownloadByIdForProfile(profileId, id);
+  const entry = getDownloadForSender(profileId, id);
   if (!entry) return false;
   return retryDownload(entry, event.sender);
 });

@@ -67,7 +67,7 @@ interface SitePermissionPromptState extends BasePromptState<SitePermissionPrompt
   type: "site-permission";
   origin: string;
   permission: string;
-  permissionLabel: string;
+  permissionLabelKey: string;
 }
 
 // Combined Prompt States //

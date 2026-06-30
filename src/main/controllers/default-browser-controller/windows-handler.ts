@@ -5,7 +5,7 @@ import { app } from "electron"; // Assuming Electron context
 import { PATHS } from "@/modules/paths";
 
 // --- Configuration: Define your Application Details ---
-const APP_NAME_SHORT = "flow"; // CHANGE THIS: e.g., "myapp", "myeditor" (no spaces!)
+const APP_NAME_SHORT = "blinker";
 const APP_NAME = app.getName(); // Or hardcode: "My Awesome App";
 const APP_DESCRIPTION = "A modern privacy-focused browser with a minimalistic design."; // CHANGE THIS if needed
 
@@ -23,10 +23,20 @@ const associations = {
     { ext: "htm", name: "HyperText Markup File", role: "Viewer" },
     { ext: "html", description: "HTML Document", role: "Viewer" },
     { ext: "mhtml", description: "MHTML Document", role: "Viewer" },
+    { ext: "mht", description: "MHTML Document", role: "Viewer" },
     { ext: "shtml", name: "HyperText Markup File", role: "Viewer" },
     { ext: "xhtml", name: "Extensible HyperText Markup File", role: "Viewer" },
     { ext: "xhtm", name: "Extensible HyperText Markup File", role: "Viewer" },
-    { ext: "pdf", description: "PDF Document", role: "Viewer" }
+    { ext: "pdf", description: "PDF Document", role: "Viewer" },
+    { ext: "txt", description: "Text Document", role: "Viewer" },
+    { ext: "svg", description: "SVG Image", role: "Viewer" },
+    { ext: "xml", description: "XML Document", role: "Viewer" },
+    { ext: "webp", description: "WebP Image", role: "Viewer" },
+    { ext: "png", description: "PNG Image", role: "Viewer" },
+    { ext: "jpg", description: "JPEG Image", role: "Viewer" },
+    { ext: "jpeg", description: "JPEG Image", role: "Viewer" },
+    { ext: "gif", description: "GIF Image", role: "Viewer" },
+    { ext: "avif", description: "AVIF Image", role: "Viewer" }
     // Add other file types here if needed
     // { ext: "txt", description: "Text Document", role: "Editor" }
   ]

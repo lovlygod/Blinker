@@ -57,7 +57,7 @@ ipcMain.handle("bookmarks:import-html", async (event) => {
   if (!profileId) return null;
 
   const result = await dialog.showOpenDialog({
-    title: "Импорт закладок",
+    title: "Import bookmarks",
     properties: ["openFile"],
     filters: [{ name: "Bookmark HTML", extensions: ["html", "htm"] }]
   });
@@ -72,7 +72,7 @@ ipcMain.handle("bookmarks:export-html", async (event) => {
   if (!profileId) return false;
 
   const result = await dialog.showSaveDialog({
-    title: "Экспорт закладок",
+    title: "Export bookmarks",
     defaultPath: "blinker-bookmarks.html",
     filters: [{ name: "Bookmark HTML", extensions: ["html"] }]
   });

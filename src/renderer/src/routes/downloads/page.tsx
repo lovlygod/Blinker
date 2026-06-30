@@ -16,6 +16,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { cn } from "@/lib/utils";
+import { t, getLocale } from "@/lib/i18n";
 import type { DownloadEntry, DownloadsPageCursor } from "~/types/downloads";
 import { Download, File, FolderOpen, Pause, Play, RotateCcw, Search, Trash2, X } from "lucide-react";
 import { toast } from "sonner";
@@ -45,12 +46,12 @@ function formatSpeed(bytesPerSecond: number) {
 
 function formatEta(seconds: number | null) {
   if (seconds === null || seconds < 0) return "";
-  if (seconds < 60) return `${seconds}s left`;
+  if (seconds < 60) return t("downloads.eta.seconds", { seconds });
   const minutes = Math.floor(seconds / 60);
   const rest = seconds % 60;
-  if (minutes < 60) return `${minutes}m ${rest.toString().padStart(2, "0")}s left`;
+  if (minutes < 60) return t("downloads.eta.minutes", { minutes, seconds: rest.toString().padStart(2, "0") });
   const hours = Math.floor(minutes / 60);
-  return `${hours}h ${(minutes % 60).toString().padStart(2, "0")}m left`;
+  return t("downloads.eta.hours", { hours, minutes: (minutes % 60).toString().padStart(2, "0") });
 }
 
 function progressValue(download: DownloadEntry) {
@@ -60,13 +61,14 @@ function progressValue(download: DownloadEntry) {
 }
 
 function statusText(download: DownloadEntry) {
-  if (download.state === "completed") return download.exists ? "Скачано" : "Удалено";
-  if (download.state === "paused") return "Пауза";
-  if (download.state === "cancelled") return "Отменено";
-  if (download.state === "interrupted") return download.errorMessage || "Ошибка загрузки";
+  if (download.state === "completed")
+    return download.exists ? t("downloads.status.completed") : t("downloads.status.deleted");
+  if (download.state === "paused") return t("downloads.status.paused");
+  if (download.state === "cancelled") return t("downloads.status.cancelled");
+  if (download.state === "interrupted") return download.errorMessage || t("downloads.status.interrupted");
   const total = formatBytes(download.totalBytes);
   const received = formatBytes(download.receivedBytes);
-  return total ? `${received} из ${total}` : "Скачивается";
+  return total ? t("downloads.status.of", { received, total }) : t("downloads.status.progressing");
 }
 
 function startOfLocalDay(ts: number): number {
@@ -79,9 +81,13 @@ function dayLabel(ts: number) {
   const today = new Date();
   const t0 = new Date(today.getFullYear(), today.getMonth(), today.getDate()).getTime();
   const t1 = t0 - 86400000;
-  if (ts >= t0) return "Сегодня";
-  if (ts >= t1) return "Вчера";
-  return d.toLocaleDateString("ru-RU", { day: "numeric", month: "long", year: "numeric" });
+  if (ts >= t0) return t("downloads.day.today");
+  if (ts >= t1) return t("downloads.day.yesterday");
+  return d.toLocaleDateString(getLocale() === "ru" ? "ru-RU" : "en-US", {
+    day: "numeric",
+    month: "long",
+    year: "numeric"
+  });
 }
 
 function groupDownloads(downloads: DownloadEntry[]) {
@@ -116,7 +122,7 @@ function DownloadCard({
 
   const runAction = async (action: Promise<boolean>) => {
     const ok = await action;
-    if (!ok) toast.error("Действие не удалось");
+    if (!ok) toast.error(t("downloads.actionFailed"));
     onAction();
   };
 
@@ -160,7 +166,7 @@ function DownloadCard({
           size="icon"
           className="size-8 shrink-0"
           onClick={() => void runAction(flow.downloads.pause(download.id))}
-          aria-label="Поставить на паузу"
+          aria-label={t("downloads.pause")}
         >
           <Pause className="size-4" />
         </Button>
@@ -171,7 +177,7 @@ function DownloadCard({
           size="icon"
           className="size-8 shrink-0"
           onClick={() => void runAction(flow.downloads.resume(download.id))}
-          aria-label="Продолжить загрузку"
+          aria-label={t("downloads.resume")}
         >
           <Play className="size-4" />
         </Button>
@@ -182,7 +188,7 @@ function DownloadCard({
           size="icon"
           className="size-8 shrink-0"
           onClick={() => void runAction(flow.downloads.cancel(download.id))}
-          aria-label="Отменить загрузку"
+          aria-label={t("downloads.cancel")}
         >
           <X className="size-4" />
         </Button>
@@ -193,7 +199,7 @@ function DownloadCard({
           size="icon"
           className="size-8 shrink-0"
           onClick={() => void runAction(flow.downloads.retry(download.id))}
-          aria-label="Скачать снова"
+          aria-label={t("downloads.downloadAgain")}
         >
           <RotateCcw className="size-4" />
         </Button>
@@ -204,7 +210,7 @@ function DownloadCard({
         className="size-8 shrink-0"
         onClick={() => void flow.downloads.showInFolder(download.id)}
         disabled={!download.exists}
-        aria-label="Показать в папке"
+        aria-label={t("downloads.showInFolder")}
       >
         <FolderOpen className="size-4" />
       </Button>
@@ -213,7 +219,7 @@ function DownloadCard({
         size="icon"
         className="size-8 shrink-0 opacity-60 hover:opacity-100"
         onClick={() => onRemove(download.id)}
-        aria-label="Убрать из истории"
+        aria-label={t("downloads.remove")}
       >
         <X className="size-4" />
       </Button>
@@ -281,7 +287,7 @@ function DownloadsPage() {
 
   const clearAll = async () => {
     await flow.downloads.clearAll();
-    toast.success("История загрузок очищена");
+    toast.success(t("downloads.cleared"));
     invalidate();
   };
 
@@ -291,14 +297,14 @@ function DownloadsPage() {
         <div className="mx-auto flex max-w-3xl items-center gap-4 px-6 py-3">
           <h1 className="flex shrink-0 items-center gap-3 text-lg font-semibold tracking-tight text-foreground">
             <Download className="size-5" />
-            История скачиваний
+            {t("downloads.title")}
           </h1>
           <div className="relative flex-1">
             <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
             <input
               value={search}
               onChange={(event) => setSearch(event.target.value)}
-              placeholder="Поиск в загрузках"
+              placeholder={t("downloads.searchPlaceholder")}
               className="h-9 w-full rounded-lg border border-input bg-muted/40 pl-9 pr-3 text-sm text-foreground outline-none transition-[border-color,box-shadow] placeholder:text-muted-foreground focus:border-ring focus:bg-background focus:ring-2 focus:ring-ring/30"
             />
           </div>
@@ -306,19 +312,17 @@ function DownloadsPage() {
             <AlertDialogTrigger asChild>
               <Button variant="ghost" size="sm" className="shrink-0 gap-2 border text-muted-foreground">
                 <Trash2 className="size-4" />
-                Удалить все
+                {t("downloads.clearAll")}
               </Button>
             </AlertDialogTrigger>
             <AlertDialogContent>
               <AlertDialogHeader>
-                <AlertDialogTitle>Очистить историю загрузок?</AlertDialogTitle>
-                <AlertDialogDescription>
-                  Файлы на диске останутся, Blinker удалит только записи из истории.
-                </AlertDialogDescription>
+                <AlertDialogTitle>{t("downloads.clearTitle")}</AlertDialogTitle>
+                <AlertDialogDescription>{t("downloads.clearDescription")}</AlertDialogDescription>
               </AlertDialogHeader>
               <AlertDialogFooter>
-                <AlertDialogCancel>Отмена</AlertDialogCancel>
-                <AlertDialogAction onClick={() => void clearAll()}>Очистить</AlertDialogAction>
+                <AlertDialogCancel>{t("action.cancel")}</AlertDialogCancel>
+                <AlertDialogAction onClick={() => void clearAll()}>{t("permissions.clear")}</AlertDialogAction>
               </AlertDialogFooter>
             </AlertDialogContent>
           </AlertDialog>
@@ -331,20 +335,20 @@ function DownloadsPage() {
         className="mx-auto flex w-full max-w-3xl flex-col gap-4 px-6 py-6"
       >
         {isPending ? (
-          <div className="py-20 text-center text-sm text-muted-foreground">Загружаю...</div>
+          <div className="py-20 text-center text-sm text-muted-foreground">{t("downloads.loading")}</div>
         ) : isError ? (
           <div className="space-y-3 py-20 text-center">
-            <p className="font-medium text-foreground">Не удалось загрузить историю</p>
+            <p className="font-medium text-foreground">{t("downloads.loadFailed")}</p>
             <Button variant="outline" size="sm" onClick={() => void refetch()}>
-              Попробовать снова
+              {t("downloads.retry")}
             </Button>
           </div>
         ) : downloads.length === 0 ? (
           <div className="py-20 text-center">
             <Download className="mx-auto mb-3 size-10 text-muted-foreground opacity-40" />
-            <p className="font-medium text-foreground">Загрузок нет</p>
+            <p className="font-medium text-foreground">{t("downloads.empty")}</p>
             <p className="mt-1 text-sm text-muted-foreground">
-              {debouncedSearch ? "Попробуйте другой запрос." : "Скачанные файлы появятся здесь."}
+              {debouncedSearch ? t("downloads.noResults") : t("downloads.emptyHint")}
             </p>
           </div>
         ) : (
@@ -372,7 +376,7 @@ function DownloadsPage() {
         )}
         {downloads.length > 0 && (
           <div ref={loadMoreRef} className="flex min-h-8 justify-center py-4 text-sm text-muted-foreground">
-            {isFetchingNextPage ? "Загружаю еще..." : !hasNextPage ? "Конец истории" : null}
+            {isFetchingNextPage ? t("downloads.loadingMore") : !hasNextPage ? t("downloads.end") : null}
           </div>
         )}
       </motion.div>
@@ -383,7 +387,7 @@ function DownloadsPage() {
 function App() {
   return (
     <>
-      <title>История скачиваний</title>
+      <title>{t("downloads.title")}</title>
       <DownloadsPage />
     </>
   );

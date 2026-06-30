@@ -1,5 +1,5 @@
 import { app, BrowserWindow } from "electron";
-import { handleOpenUrl } from "@/app/urls";
+import { handleOpenUrl, normalizeOpenTarget } from "@/app/urls";
 import { hasCompletedOnboarding } from "@/saving/onboarding";
 import { browserWindowsController } from "@/controllers/windows-controller/interfaces/browser";
 
@@ -30,6 +30,14 @@ export function setupAppLifecycle() {
 
   app.on("open-url", async (_event, url) => {
     handleOpenUrl(false, url);
+  });
+
+  app.on("open-file", (event, filePath) => {
+    event.preventDefault();
+    const url = normalizeOpenTarget(filePath);
+    if (url) {
+      handleOpenUrl(false, url);
+    }
   });
 
   app.on("continue-activity", (_event, type, _userInfo, details) => {

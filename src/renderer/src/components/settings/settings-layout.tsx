@@ -43,7 +43,7 @@ export function SettingsLayout() {
     { id: "general", label: t("settings.general"), icon: <Globe className="h-4 w-4 mr-2" /> },
     { id: "import-data", label: t("settings.importData"), icon: <Import className="h-4 w-4 mr-2" /> },
     { id: "passwords", label: t("settings.passwords"), icon: <KeyRound className="h-4 w-4 mr-2" /> },
-    { id: "permissions", label: "Разрешения", icon: <ShieldCheck className="h-4 w-4 mr-2" /> },
+    { id: "permissions", label: t("permissions.title"), icon: <ShieldCheck className="h-4 w-4 mr-2" /> },
     { id: "icons", label: t("settings.icon"), icon: <DockIcon className="h-4 w-4 mr-2" /> },
     { id: "profiles", label: t("settings.profiles"), icon: <UsersIcon className="h-4 w-4 mr-2" /> },
     { id: "spaces", label: t("settings.spaces"), icon: <OrbitIcon className="h-4 w-4 mr-2" /> },

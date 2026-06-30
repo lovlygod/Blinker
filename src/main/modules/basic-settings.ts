@@ -33,102 +33,58 @@ export const SleepTabValueMap = {
 };
 
 export const BasicSettings: BasicSetting[] = [
-  // [GENERAL] Auto Update
   {
     id: "autoUpdate",
-    name: "Автоматические обновления",
+    name: "Automatic updates",
     showName: true,
     type: "boolean",
     defaultValue: true
   },
-
-  // [GENERAL] Sync Tabs Across Windows
   {
     id: "syncTabsAcrossWindows",
-    name: "Синхронизировать вкладки между окнами",
+    name: "Sync tabs across windows",
     showName: true,
     type: "boolean",
     defaultValue: false
   },
-
-  // [GENERAL] Content Blocking
   {
     id: "contentBlocker",
-    name: "Блокировка контента (встроенный блокировщик рекламы)",
+    name: "Content blocker",
     showName: true,
     type: "enum",
     defaultValue: "disabled",
     options: [
-      {
-        id: "disabled",
-        name: "Отключено"
-      },
-      {
-        id: "adsOnly",
-        name: "Блокировать рекламу"
-      },
-      {
-        id: "adsAndTrackers",
-        name: "Блокировать рекламу и трекеры"
-      },
-      {
-        id: "all",
-        name: "Блокировать все (баннеры cookie и т. д.)"
-      }
+      { id: "disabled", name: "Disabled" },
+      { id: "adsOnly", name: "Block ads" },
+      { id: "adsAndTrackers", name: "Block ads and trackers" },
+      { id: "all", name: "Block everything" }
     ]
   },
-
-  // [GENERAL] App Language
   {
     id: "appLanguage",
-    name: "Язык интерфейса",
+    name: "Interface language",
     showName: true,
     type: "enum",
     defaultValue: "system",
     options: [
-      {
-        id: "system",
-        name: "Как в системе"
-      },
-      {
-        id: "ru",
-        name: "Русский"
-      },
-      {
-        id: "en",
-        name: "English"
-      }
+      { id: "system", name: "System" },
+      { id: "ru", name: "Russian" },
+      { id: "en", name: "English" }
     ]
   },
-
-  // [GENERAL] Default Search Engine
   {
     id: "defaultSearchEngine",
-    name: "Поисковик по умолчанию",
+    name: "Default search engine",
     showName: true,
     type: "enum",
     defaultValue: "google",
     options: [
-      {
-        id: "google",
-        name: "Google"
-      },
-      {
-        id: "yandex",
-        name: "Яндекс"
-      },
-      {
-        id: "duckduckgo",
-        name: "DuckDuckGo"
-      },
-      {
-        id: "bing",
-        name: "Bing"
-      }
+      { id: "google", name: "Google" },
+      { id: "yandex", name: "Yandex" },
+      { id: "duckduckgo", name: "DuckDuckGo" },
+      { id: "bing", name: "Bing" }
     ]
   },
-
-  // [GENERAL] Download Directory
   {
     id: "downloadDirectory",
     name: "Download folder",
@@ -136,163 +92,83 @@ export const BasicSettings: BasicSetting[] = [
     type: "string",
     defaultValue: ""
   },
-
-  // New Tab Mode
   {
     id: "newTabMode",
-    name: "Режим новой вкладки",
+    name: "New tab mode",
     showName: false,
     type: "enum",
     defaultValue: "tab",
     options: [
-      {
-        id: "omnibox",
-        name: "Командная палитра"
-      },
-      {
-        id: "tab",
-        name: "Страница"
-      }
+      { id: "omnibox", name: "Command palette" },
+      { id: "tab", name: "Page" }
     ]
   },
-
-  // Command Palette Opacity
   {
     id: "commandPaletteOpacity",
-    name: "Прозрачность командной палитры",
+    name: "Command palette opacity",
     showName: false,
     type: "enum",
     defaultValue: "tinted",
     options: [
-      {
-        id: "solid",
-        name: "Сплошная"
-      },
-      {
-        id: "tinted",
-        name: "Тонированная (по умолчанию)"
-      },
-      {
-        id: "glassy",
-        name: "Стеклянная"
-      }
+      { id: "solid", name: "Solid" },
+      { id: "tinted", name: "Tinted" },
+      { id: "glassy", name: "Glassy" }
     ]
   },
-
-  // Sidebar Side
   {
     id: "sidebarSide",
-    name: "Сторона боковой панели",
+    name: "Sidebar side",
     showName: true,
     type: "enum",
     defaultValue: "left",
     options: [
-      {
-        id: "left",
-        name: "Слева"
-      },
-      {
-        id: "right",
-        name: "Справа (экспериментально)"
-      }
+      { id: "left", name: "Left" },
+      { id: "right", name: "Right" }
     ]
   },
-
-  // Archive Tab After
   {
     id: "archiveTabAfter",
-    name: "Архивировать вкладку через",
+    name: "Archive tab after",
     showName: false,
     type: "enum",
     defaultValue: "12h",
     options: [
-      {
-        id: "12h",
-        name: "12 часов"
-      },
-      {
-        id: "24h",
-        name: "24 часа"
-      },
-      {
-        id: "7d",
-        name: "7 дней"
-      },
-      {
-        id: "30d",
-        name: "30 дней"
-      },
-      {
-        id: "never",
-        name: "Никогда"
-      }
+      { id: "12h", name: "12 hours" },
+      { id: "24h", name: "24 hours" },
+      { id: "7d", name: "7 days" },
+      { id: "30d", name: "30 days" },
+      { id: "never", name: "Never" }
     ]
   },
-
-  // Sleep Tab After
   {
     id: "sleepTabAfter",
-    name: "Усыплять вкладку через",
+    name: "Sleep tab after",
     showName: false,
     type: "enum",
     defaultValue: "never",
     options: [
-      {
-        id: "5m",
-        name: "5 минут"
-      },
-      {
-        id: "10m",
-        name: "10 минут"
-      },
-      {
-        id: "30m",
-        name: "30 минут"
-      },
-      {
-        id: "1h",
-        name: "1 час"
-      },
-      {
-        id: "2h",
-        name: "2 часа"
-      },
-      {
-        id: "4h",
-        name: "4 часа"
-      },
-      {
-        id: "8h",
-        name: "8 часов"
-      },
-      {
-        id: "12h",
-        name: "12 часов"
-      },
-      {
-        id: "24h",
-        name: "24 часа"
-      },
-      {
-        id: "never",
-        name: "Никогда"
-      }
+      { id: "5m", name: "5 minutes" },
+      { id: "10m", name: "10 minutes" },
+      { id: "30m", name: "30 minutes" },
+      { id: "1h", name: "1 hour" },
+      { id: "2h", name: "2 hours" },
+      { id: "4h", name: "4 hours" },
+      { id: "8h", name: "8 hours" },
+      { id: "12h", name: "12 hours" },
+      { id: "24h", name: "24 hours" },
+      { id: "never", name: "Never" }
     ]
   },
-
-  // [EXPERIMENTAL] Enable Blinker PDF Viewer
   {
     id: "enableFlowPdfViewer",
-    name: "Включить PDF-просмотрщик Blinker",
+    name: "Enable Blinker PDF viewer",
     showName: true,
     type: "boolean",
     defaultValue: false
   },
-
-  // [ADVANCED] Enable mv2 extensions
   {
     id: "enableMv2Extensions",
-    name: "Снова включить расширения Manifest V2 [нестабильно]",
+    name: "Enable Manifest V2 extensions",
     showName: true,
     type: "boolean",
     defaultValue: false
@@ -300,10 +176,9 @@ export const BasicSettings: BasicSetting[] = [
 ];
 
 export const BasicSettingCards: BasicSettingCard[] = [
-  // General Card
   {
-    title: "Общие настройки",
-    subtitle: "Основные настройки приложения",
+    title: "General settings",
+    subtitle: "Core application settings",
     settings: [
       "autoUpdate",
       "syncTabsAcrossWindows",
@@ -314,60 +189,44 @@ export const BasicSettingCards: BasicSettingCard[] = [
       "internal_setAsDefaultBrowser"
     ]
   },
-
-  // Update Card (Internal)
   {
     title: "INTERNAL_UPDATE",
     subtitle: "",
     settings: []
   },
-
-  // New Tab Mode Card
   {
-    title: "Новая вкладка",
-    subtitle: "Выберите, как должны открываться новые вкладки",
+    title: "New Tab Mode",
+    subtitle: "Choose how new tabs open",
     settings: ["newTabMode"]
   },
-
-  // Command Palette Card
   {
-    title: "Командная палитра",
-    subtitle: "Выберите прозрачность командной палитры",
+    title: "Command palette",
+    subtitle: "Choose command palette opacity",
     settings: ["commandPaletteOpacity"]
   },
-
-  // Sidebar Settings Card
   {
-    title: "Боковая панель",
-    subtitle: "Настройте поведение боковой панели",
+    title: "Sidebar",
+    subtitle: "Configure sidebar behavior",
     settings: ["sidebarSide"]
   },
-
-  // Performance Settings Card
   {
-    title: "Производительность",
-    subtitle: "Настройки для повышения производительности",
+    title: "Performance",
+    subtitle: "Settings to improve performance",
     settings: ["archiveTabAfter", "sleepTabAfter"]
   },
-
-  // Onboarding Card (Internal)
   {
     title: "INTERNAL_ONBOARDING",
     subtitle: "",
     settings: []
   },
-
-  // Experimental Settings Card
   {
-    title: "Экспериментальные настройки",
-    subtitle: "Экспериментальные возможности Blinker",
+    title: "Experimental settings",
+    subtitle: "Experimental Blinker features",
     settings: ["enableFlowPdfViewer"]
   },
-
-  // Advanced Settings Card
   {
-    title: "Расширенные настройки",
-    subtitle: "Для опытных пользователей (некоторые настройки требуют перезапуска)",
+    title: "Advanced settings",
+    subtitle: "For advanced users",
     settings: ["enableMv2Extensions"]
   }
 ];

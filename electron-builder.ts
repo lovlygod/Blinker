@@ -69,6 +69,11 @@ const electronBuilderConfig: Configuration = {
       role: "Viewer"
     },
     {
+      ext: "mht",
+      description: "MHTML Document",
+      role: "Viewer"
+    },
+    {
       ext: "shtml",
       name: "HyperText Markup File",
       role: "Viewer"
@@ -86,6 +91,51 @@ const electronBuilderConfig: Configuration = {
     {
       ext: "pdf",
       description: "PDF Document",
+      role: "Viewer"
+    },
+    {
+      ext: "txt",
+      description: "Text Document",
+      role: "Viewer"
+    },
+    {
+      ext: "svg",
+      description: "SVG Image",
+      role: "Viewer"
+    },
+    {
+      ext: "xml",
+      description: "XML Document",
+      role: "Viewer"
+    },
+    {
+      ext: "webp",
+      description: "WebP Image",
+      role: "Viewer"
+    },
+    {
+      ext: "png",
+      description: "PNG Image",
+      role: "Viewer"
+    },
+    {
+      ext: "jpg",
+      description: "JPEG Image",
+      role: "Viewer"
+    },
+    {
+      ext: "jpeg",
+      description: "JPEG Image",
+      role: "Viewer"
+    },
+    {
+      ext: "gif",
+      description: "GIF Image",
+      role: "Viewer"
+    },
+    {
+      ext: "avif",
+      description: "AVIF Image",
       role: "Viewer"
     }
   ],

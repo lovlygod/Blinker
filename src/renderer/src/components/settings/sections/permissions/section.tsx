@@ -4,34 +4,28 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow
-} from "@/components/ui/table";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { t } from "@/lib/i18n";
 import type { Profile } from "~/flow/interfaces/sessions/profiles";
 import type { SitePermissionEntry, SitePermissionSetting } from "~/types/site-permissions";
 
-const permissionLabels: Record<string, string> = {
-  media: "Камера и микрофон",
-  geolocation: "Геолокация",
-  notifications: "Уведомления",
-  midiSysex: "MIDI-устройства",
-  pointerLock: "Захват курсора",
-  fullscreen: "Полноэкранный режим"
+const permissionLabelKeys: Record<string, string> = {
+  media: "permission.cameraMicrophoneTitle",
+  geolocation: "permission.geolocationTitle",
+  notifications: "permission.notificationsTitle",
+  midiSysex: "permission.midiSysexTitle",
+  pointerLock: "permission.pointerLockTitle",
+  fullscreen: "permission.fullscreenTitle"
 };
 
 function labelForPermission(permission: string) {
-  return permissionLabels[permission] ?? permission;
+  return t(permissionLabelKeys[permission] ?? permission);
 }
 
 function labelForSetting(setting: SitePermissionSetting) {
-  if (setting === "allow") return "Разрешено";
-  if (setting === "block") return "Заблокировано";
-  return "Спрашивать";
+  if (setting === "allow") return t("permissions.allow");
+  if (setting === "block") return t("permissions.block");
+  return t("permissions.ask");
 }
 
 export function PermissionsSettings() {
@@ -111,8 +105,8 @@ export function PermissionsSettings() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-3xl font-bold tracking-tight">Разрешения сайтов</h1>
-        <p className="text-muted-foreground">Управляйте доступом сайтов к камере, микрофону, геолокации и другим возможностям.</p>
+        <h1 className="text-3xl font-bold tracking-tight">{t("permissions.title")}</h1>
+        <p className="text-muted-foreground">{t("permissions.subtitle")}</p>
       </div>
 
       <Card>
@@ -121,21 +115,21 @@ export function PermissionsSettings() {
             <div>
               <CardTitle className="flex items-center gap-2 text-xl">
                 <ShieldCheck className="h-5 w-5" />
-                Permissions Center
+                {t("permissions.center")}
               </CardTitle>
-              <CardDescription>Новые запросы сайтов будут сохраняться здесь, если вы выберете постоянное разрешение.</CardDescription>
+              <CardDescription>{t("permissions.description")}</CardDescription>
             </div>
             <Button variant="outline" onClick={clearAll} disabled={!profileId || permissions.length === 0}>
               <Trash2 className="h-4 w-4" />
-              Очистить
+              {t("permissions.clear")}
             </Button>
           </div>
 
           <div className="max-w-xs space-y-2">
-            <Label htmlFor="permissions-profile">Профиль</Label>
+            <Label htmlFor="permissions-profile">{t("permissions.profile")}</Label>
             <Select value={profileId} onValueChange={setProfileId}>
               <SelectTrigger id="permissions-profile" className="w-full">
-                <SelectValue placeholder="Выберите профиль" />
+                <SelectValue placeholder={t("permissions.selectProfile")} />
               </SelectTrigger>
               <SelectContent className="remove-app-drag z-popover">
                 {profiles.map((profile) => (
@@ -149,14 +143,12 @@ export function PermissionsSettings() {
         </CardHeader>
         <CardContent>
           {loading ? (
-            <div className="py-14 text-center text-sm text-muted-foreground">Загрузка разрешений...</div>
+            <div className="py-14 text-center text-sm text-muted-foreground">{t("permissions.loading")}</div>
           ) : permissions.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-14 text-center">
               <ShieldCheck className="mb-3 h-10 w-10 text-muted-foreground" />
-              <p className="font-medium text-card-foreground">Пока нет сохраненных разрешений</p>
-              <p className="mt-1 max-w-md text-sm text-muted-foreground">
-                Когда сайт попросит постоянный доступ, запись появится в этом списке.
-              </p>
+              <p className="font-medium text-card-foreground">{t("permissions.empty")}</p>
+              <p className="mt-1 max-w-md text-sm text-muted-foreground">{t("permissions.emptyHint")}</p>
             </div>
           ) : (
             <div className="space-y-5">
@@ -166,9 +158,9 @@ export function PermissionsSettings() {
                   <Table>
                     <TableHeader>
                       <TableRow>
-                        <TableHead>Разрешение</TableHead>
-                        <TableHead className="w-48">Состояние</TableHead>
-                        <TableHead className="w-20 text-right">Действия</TableHead>
+                        <TableHead>{t("permissions.permission")}</TableHead>
+                        <TableHead className="w-48">{t("permissions.state")}</TableHead>
+                        <TableHead className="w-20 text-right">{t("permissions.actions")}</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -178,17 +170,15 @@ export function PermissionsSettings() {
                           <TableCell>
                             <Select
                               value={entry.setting}
-                              onValueChange={(value) =>
-                                void updatePermission(entry, value as SitePermissionSetting)
-                              }
+                              onValueChange={(value) => void updatePermission(entry, value as SitePermissionSetting)}
                             >
                               <SelectTrigger className="w-full">
                                 <SelectValue>{labelForSetting(entry.setting)}</SelectValue>
                               </SelectTrigger>
                               <SelectContent className="remove-app-drag z-popover">
-                                <SelectItem value="allow">Разрешено</SelectItem>
-                                <SelectItem value="block">Заблокировано</SelectItem>
-                                <SelectItem value="ask">Спрашивать</SelectItem>
+                                <SelectItem value="allow">{t("permissions.allow")}</SelectItem>
+                                <SelectItem value="block">{t("permissions.block")}</SelectItem>
+                                <SelectItem value="ask">{t("permissions.ask")}</SelectItem>
                               </SelectContent>
                             </Select>
                           </TableCell>
@@ -198,7 +188,7 @@ export function PermissionsSettings() {
                               size="icon"
                               className="size-8"
                               onClick={() => void removePermission(entry)}
-                              aria-label="Удалить разрешение"
+                              aria-label={t("permissions.remove")}
                             >
                               <Trash2 className="size-4" />
                             </Button>

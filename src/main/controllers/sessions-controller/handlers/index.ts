@@ -7,7 +7,14 @@ import { getSitePermissionSetting, setSitePermissionForProfile } from "@/saving/
 import { app, dialog, OpenExternalPermissionRequest, type Session } from "electron";
 import type { PromptResult, PromptState, SitePermissionPromptResult } from "~/types/prompts";
 
-const MANAGED_PERMISSIONS = new Set(["media", "geolocation", "notifications", "midiSysex", "pointerLock", "fullscreen"]);
+const MANAGED_PERMISSIONS = new Set([
+  "media",
+  "geolocation",
+  "notifications",
+  "midiSysex",
+  "pointerLock",
+  "fullscreen"
+]);
 
 function originFromUrl(url: string): string | null {
   try {
@@ -19,20 +26,20 @@ function originFromUrl(url: string): string | null {
   }
 }
 
-function permissionLabel(permission: string) {
+function permissionLabelKey(permission: string) {
   switch (permission) {
     case "media":
-      return "камере или микрофону";
+      return "permission.cameraMicrophone";
     case "geolocation":
-      return "геолокации";
+      return "permission.geolocation";
     case "notifications":
-      return "уведомлениям";
+      return "permission.notifications";
     case "midiSysex":
-      return "MIDI-устройствам";
+      return "permission.midiSysex";
     case "pointerLock":
-      return "захвату курсора";
+      return "permission.pointerLock";
     case "fullscreen":
-      return "полноэкранному режиму";
+      return "permission.fullscreen";
     default:
       return permission;
   }
@@ -47,7 +54,7 @@ async function requestSitePermission(tabId: number, origin: string, permission: 
     originUrl: origin,
     origin,
     permission,
-    permissionLabel: permissionLabel(permission),
+    permissionLabelKey: permissionLabelKey(permission),
     promise,
     resolver: resolve
   };

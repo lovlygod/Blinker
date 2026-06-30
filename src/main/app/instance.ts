@@ -1,5 +1,5 @@
 import { app } from "electron";
-import { handleOpenUrl, isValidOpenerUrl } from "@/app/urls";
+import { handleOpenUrl, normalizeOpenTarget } from "@/app/urls";
 import { debugPrint } from "@/modules/output";
 import { createIncognitoWindow } from "@/modules/incognito/windows";
 import { FLAGS } from "@/modules/flags";
@@ -23,8 +23,8 @@ export function setupSecondInstanceHandling() {
       return;
     }
 
-    const url = commandLine.pop();
-    if (url && isValidOpenerUrl(url)) {
+    const url = commandLine.map(normalizeOpenTarget).find((target): target is string => Boolean(target));
+    if (url) {
       const shouldCreate = shouldCreateNewWindow(commandLine);
       handleOpenUrl(shouldCreate, url);
     }

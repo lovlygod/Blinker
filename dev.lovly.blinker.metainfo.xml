@@ -59,6 +59,12 @@
   </requires>
 
   <releases>
+    <release version="1.16.0" date="2026-06-30">
+      <url type="details">https://github.com/lovlygod/Blinker/releases/tag/v1.16.0</url>
+      <description>
+        <p>Improved localization coverage and added local file opening support for HTML, PDF, text, XML, SVG, and common image files.</p>
+      </description>
+    </release>
     <release version="1.15.0" date="2026-06-30">
       <url type="details">https://github.com/lovlygod/Blinker/releases/tag/v1.15.0</url>
       <description>

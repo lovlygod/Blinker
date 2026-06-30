@@ -87,9 +87,9 @@ function DownloadDirectoryInput() {
       <span className="max-w-[260px] truncate text-xs text-muted-foreground">{directory}</span>
       <Button variant="outline" size="sm" onClick={() => void choose()} className="gap-2">
         <FolderOpen className="size-3.5" />
-        Choose
+        {t("setting.chooseDownloadFolder")}
       </Button>
-      <Button variant="ghost" size="icon" onClick={() => void reset()} aria-label="Reset downloads folder">
+      <Button variant="ghost" size="icon" onClick={() => void reset()} aria-label={t("setting.resetDownloadFolder")}>
         <RotateCcw className="size-3.5" />
       </Button>
     </div>

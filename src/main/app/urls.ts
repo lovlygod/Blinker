@@ -4,6 +4,8 @@ import { hasCompletedOnboarding } from "@/saving/onboarding";
 import { debugPrint } from "@/modules/output";
 import { createIncognitoWindow } from "@/modules/incognito/windows";
 import { FLAGS } from "@/modules/flags";
+import { pathToFileURL } from "url";
+import path from "path";
 
 /**
  * During cold start, URLs are queued until the initial window (session restore
@@ -21,10 +23,49 @@ export function isValidOpenerUrl(url: string): boolean {
   const urlObject = URL.parse(url);
   if (!urlObject) return false;
 
-  const VALID_PROTOCOLS = ["http:", "https:"];
+  const VALID_PROTOCOLS = ["http:", "https:", "file:"];
   if (!VALID_PROTOCOLS.includes(urlObject.protocol)) return false;
 
   return true;
+}
+
+const SUPPORTED_FILE_EXTENSIONS = new Set([
+  ".htm",
+  ".html",
+  ".mhtml",
+  ".mht",
+  ".shtml",
+  ".xhtml",
+  ".xht",
+  ".pdf",
+  ".svg",
+  ".txt",
+  ".xml",
+  ".webp",
+  ".png",
+  ".jpg",
+  ".jpeg",
+  ".gif",
+  ".avif"
+]);
+
+export function normalizeOpenTarget(target: string | undefined): string | null {
+  if (!target) return null;
+
+  const trimmed = target.trim().replace(/^"|"$/g, "");
+  if (!trimmed || trimmed.startsWith("-")) return null;
+
+  if (isValidOpenerUrl(trimmed)) {
+    return trimmed;
+  }
+
+  if (/^[a-zA-Z]:[\\/]/.test(trimmed) || trimmed.startsWith("\\\\")) {
+    const extension = path.extname(trimmed).toLowerCase();
+    if (!SUPPORTED_FILE_EXTENSIONS.has(extension)) return null;
+    return pathToFileURL(path.resolve(trimmed)).toString();
+  }
+
+  return null;
 }
 
 export async function handleOpenUrl(useNewWindow: boolean, url: string) {
@@ -96,8 +137,8 @@ export function processInitialUrl() {
     return;
   }
 
-  const targetUrl = commandLine.pop();
-  if (targetUrl && isValidOpenerUrl(targetUrl)) {
+  const targetUrl = commandLine.map(normalizeOpenTarget).find((url): url is string => Boolean(url));
+  if (targetUrl) {
     handleOpenUrl(false, targetUrl);
     debugPrint("INITIALIZATION", "initial URL handled");
   }

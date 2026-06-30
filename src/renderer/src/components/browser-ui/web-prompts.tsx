@@ -301,6 +301,7 @@ function permissionIcon(permission: string) {
 
 function SitePermissionCard({ prompt }: { prompt: SitePermissionActivePrompt }) {
   const cardRef = useRef<HTMLDivElement>(null);
+  const permissionLabel = t(prompt.permissionLabelKey);
 
   const block = useCallback(() => {
     flow.prompts.confirmPrompt(prompt.id, "block", false);
@@ -344,27 +345,27 @@ function SitePermissionCard({ prompt }: { prompt: SitePermissionActivePrompt }) 
             {permissionIcon(prompt.permission)}
           </div>
           <div className="min-w-0">
-            <CardTitle className="text-base">Разрешение для сайта</CardTitle>
+            <CardTitle className="text-base">{t("prompt.permissionTitle")}</CardTitle>
             <p className="truncate text-xs text-muted-foreground">{prompt.origin}</p>
           </div>
         </div>
       </CardHeader>
       <CardContent>
         <p className="text-sm leading-6 text-muted-foreground">
-          Сайт запрашивает доступ к <span className="text-foreground">{prompt.permissionLabel}</span>.
+          {t("prompt.permissionDescription", { permission: permissionLabel })}
         </p>
       </CardContent>
       <CardFooter className="grid grid-cols-3 gap-2">
         <Button variant="outline" onClick={block}>
-          Блокировать
+          {t("prompt.permissionBlock")}
           <span className="text-xs text-muted-foreground">Esc</span>
         </Button>
         <Button variant="default" onClick={allow}>
-          Разрешить
+          {t("prompt.permissionAllow")}
           <span className="text-xs text-muted">Enter</span>
         </Button>
         <Button variant="secondary" onClick={always}>
-          Всегда
+          {t("prompt.permissionAlways")}
         </Button>
       </CardFooter>
     </Card>

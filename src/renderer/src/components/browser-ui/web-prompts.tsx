@@ -13,12 +13,14 @@ import { useActivePrompts } from "@/components/providers/active-prompts-provider
 import type { ActivePrompt, BasicAuthCredentials } from "~/types/prompts";
 import { getOriginFromURL } from "~/utility";
 import { t } from "@/lib/i18n";
+import { MapPin, ShieldCheck } from "lucide-react";
 
 const suppressablePromptTypes = ["prompt", "confirm", "alert"] as const satisfies ActivePrompt["type"][];
 
 type JsDialogActivePrompt = Extract<ActivePrompt, { type: "prompt" | "confirm" | "alert" }>;
 type BasicAuthActivePrompt = Extract<ActivePrompt, { type: "basic-auth" }>;
 type SavePasswordActivePrompt = Extract<ActivePrompt, { type: "save-password" }>;
+type SitePermissionActivePrompt = Extract<ActivePrompt, { type: "site-permission" }>;
 
 interface WebPromptsProps {
   anchorRef: React.RefObject<HTMLDivElement | null>;
@@ -288,6 +290,87 @@ function SavePasswordCard({ prompt }: { prompt: SavePasswordActivePrompt }) {
   );
 }
 
+function permissionIcon(permission: string) {
+  switch (permission) {
+    case "geolocation":
+      return <MapPin className="size-5" />;
+    default:
+      return <ShieldCheck className="size-5" />;
+  }
+}
+
+function SitePermissionCard({ prompt }: { prompt: SitePermissionActivePrompt }) {
+  const cardRef = useRef<HTMLDivElement>(null);
+
+  const block = useCallback(() => {
+    flow.prompts.confirmPrompt(prompt.id, "block", false);
+  }, [prompt.id]);
+
+  const allow = useCallback(() => {
+    flow.prompts.confirmPrompt(prompt.id, "allow", false);
+  }, [prompt.id]);
+
+  const always = useCallback(() => {
+    flow.prompts.confirmPrompt(prompt.id, "always", false);
+  }, [prompt.id]);
+
+  useEffect(() => {
+    const card = cardRef.current;
+    if (!card) return;
+
+    const ownerDocument = card.ownerDocument;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.ctrlKey || e.metaKey || e.altKey || e.shiftKey) return;
+      if (e.key === "Escape") block();
+      if (e.key === "Enter") allow();
+    };
+
+    ownerDocument.addEventListener("keydown", handleKeyDown);
+    return () => ownerDocument.removeEventListener("keydown", handleKeyDown);
+  }, [allow, block]);
+
+  return (
+    <Card
+      ref={cardRef}
+      className={cn(
+        "w-full max-w-[420px] select-none overflow-hidden",
+        "border border-border/70 bg-popover/95 text-popover-foreground",
+        "shadow-2xl shadow-black/45 backdrop-blur-xl"
+      )}
+    >
+      <CardHeader className="gap-3">
+        <div className="flex items-center gap-3">
+          <div className="grid size-10 shrink-0 place-items-center rounded-md border border-border/60 bg-accent/60 text-foreground">
+            {permissionIcon(prompt.permission)}
+          </div>
+          <div className="min-w-0">
+            <CardTitle className="text-base">Разрешение для сайта</CardTitle>
+            <p className="truncate text-xs text-muted-foreground">{prompt.origin}</p>
+          </div>
+        </div>
+      </CardHeader>
+      <CardContent>
+        <p className="text-sm leading-6 text-muted-foreground">
+          Сайт запрашивает доступ к <span className="text-foreground">{prompt.permissionLabel}</span>.
+        </p>
+      </CardContent>
+      <CardFooter className="grid grid-cols-3 gap-2">
+        <Button variant="outline" onClick={block}>
+          Блокировать
+          <span className="text-xs text-muted-foreground">Esc</span>
+        </Button>
+        <Button variant="default" onClick={allow}>
+          Разрешить
+          <span className="text-xs text-muted">Enter</span>
+        </Button>
+        <Button variant="secondary" onClick={always}>
+          Всегда
+        </Button>
+      </CardFooter>
+    </Card>
+  );
+}
+
 const TabWebPrompt = memo(function TabWebPrompt({
   isVisible,
   portalStyle,
@@ -305,6 +388,8 @@ const TabWebPrompt = memo(function TabWebPrompt({
             <BasicAuthCard prompt={prompt} />
           ) : prompt.type === "save-password" ? (
             <SavePasswordCard prompt={prompt} />
+          ) : prompt.type === "site-permission" ? (
+            <SitePermissionCard prompt={prompt} />
           ) : (
             <JavaScriptDialogCard prompt={prompt} />
           )}

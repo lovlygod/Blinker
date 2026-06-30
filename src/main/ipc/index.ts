@@ -13,6 +13,7 @@ import "@/ipc/browser/page";
 import "@/ipc/browser/navigation";
 import "@/ipc/browser/history";
 import "@/ipc/browser/downloads";
+import "@/ipc/browser/bookmarks";
 import "@/ipc/browser/interface";
 import "@/ipc/browser/find-in-page";
 import "@/ipc/window/omnibox";
@@ -29,6 +30,7 @@ import "@/ipc/app/icons";
 import "@/ipc/app/open-external";
 import "@/ipc/app/onboarding";
 import "@/ipc/app/passwords";
+import "@/ipc/app/site-permissions";
 
 // Special
 import "@/ipc/listeners-manager";

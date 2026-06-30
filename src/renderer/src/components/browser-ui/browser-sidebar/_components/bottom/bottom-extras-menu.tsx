@@ -4,7 +4,7 @@ import { useSpaces } from "@/components/providers/spaces-provider";
 import { Button } from "@/components/ui/button";
 import { Command, CommandItem, CommandList } from "@/components/ui/command";
 import { cn } from "@/lib/utils";
-import { ArchiveIcon, HistoryIcon, LucideIcon, SettingsIcon } from "lucide-react";
+import { ArchiveIcon, BookmarkIcon, HistoryIcon, LucideIcon, SettingsIcon } from "lucide-react";
 import { useCallback, useRef, useState } from "react";
 
 function BottomExtrasMenuItem({
@@ -59,6 +59,13 @@ export function BottomExtrasMenu() {
               Icon={HistoryIcon}
               label="History"
               url="blinker://history"
+              onItemSelected={onItemSelected}
+            />
+            <BottomExtrasMenuItem
+              id="bookmarks"
+              Icon={BookmarkIcon}
+              label="Bookmarks"
+              url="blinker://bookmarks"
               onItemSelected={onItemSelected}
             />
             <BottomExtrasMenuItem

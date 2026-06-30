@@ -1,4 +1,4 @@
-// This file will be super large and complex, so
+﻿// This file will be super large and complex, so
 // make sure to keep it clean and organized.
 
 // IMPORTS //
@@ -31,6 +31,7 @@ import { FlowNewTabAPI } from "~/flow/interfaces/browser/newTab";
 import { FlowOpenExternalAPI } from "~/flow/interfaces/settings/openExternal";
 import { FlowOnboardingAPI } from "~/flow/interfaces/settings/onboarding";
 import { FlowPasswordsAPI } from "~/flow/interfaces/settings/passwords";
+import { FlowSitePermissionsAPI } from "~/flow/interfaces/settings/site-permissions";
 import type { FlowOmniboxAPI, OmniboxOpenParams } from "~/flow/interfaces/browser/omnibox";
 import { FlowSettingsAPI } from "~/flow/interfaces/settings/settings";
 import { FlowWindowsAPI } from "~/flow/interfaces/app/windows";
@@ -43,6 +44,7 @@ import { FlowShortcutsAPI, ShortcutsData } from "~/flow/interfaces/app/shortcuts
 import { FlowFindInPageAPI, FindInPageResult } from "~/flow/interfaces/browser/find-in-page";
 import { FlowHistoryAPI } from "~/flow/interfaces/browser/history";
 import { FlowDownloadsAPI } from "~/flow/interfaces/browser/downloads";
+import { FlowBookmarksAPI } from "~/flow/interfaces/browser/bookmarks";
 import { FlowPasskeyAPI } from "~/flow/interfaces/browser/passkey";
 import type { ConditionalPasskeyRequest, PasskeyCredential } from "~/types/passkey";
 import { FlowPromptsAPI } from "~/flow/interfaces/browser/prompts";
@@ -82,6 +84,7 @@ function hasPermission(permission: Permission) {
   const isExtensions = isLocation("blinker:", "extensions");
   const isHistoryPage = isLocation("blinker:", "history");
   const isDownloadsPage = isLocation("blinker:", "downloads");
+  const isBookmarksPage = isLocation("blinker:", "bookmarks");
   const isSettingsPage = isLocation("blinker:", "settings");
 
   switch (permission) {
@@ -90,7 +93,7 @@ function hasPermission(permission: Permission) {
     case "app":
       return isInternalProtocols || isExtensions;
     case "browser":
-      return isBrowserUI || isOmnibox || isHistoryPage || isDownloadsPage;
+      return isBrowserUI || isOmnibox || isHistoryPage || isDownloadsPage || isBookmarksPage;
     case "session":
       return isFlowInternalProtocol || isOmnibox || isBrowserUI || isSettingsPage;
     case "settings":
@@ -344,7 +347,7 @@ function installPasswordAutofillBridge() {
         box.replaceChildren();
         const title = document.createElement("div");
         title.className = "title";
-        title.textContent = "Сохранённые логины";
+        title.textContent = "Сохраненные логины";
         box.appendChild(title);
 
         for (const credential of credentials.slice(0, 6)) {
@@ -424,6 +427,17 @@ function installPasswordAutofillBridge() {
 
       document.addEventListener("focusin", (event) => void showAutofillFor(event.target), true);
       document.addEventListener("click", (event) => void showAutofillFor(event.target), true);
+      document.addEventListener(
+        "click",
+        (event) => {
+          const target = event.target;
+          if (!(target instanceof HTMLElement)) return;
+          const submitter = target.closest('button[type="submit"], input[type="submit"], button:not([type])');
+          if (!submitter) return;
+          captureCandidate((submitter as HTMLButtonElement | HTMLInputElement).form ?? null, target);
+        },
+        true
+      );
       document.addEventListener(
         "pointerdown",
         (event) => {
@@ -1051,6 +1065,47 @@ const passwordsAPI: FlowPasswordsAPI = {
   }
 };
 
+// BOOKMARKS API //
+const bookmarksAPI: FlowBookmarksAPI = {
+  list: async () => {
+    return ipcRenderer.invoke("bookmarks:list");
+  },
+  getForUrl: async (url) => {
+    return ipcRenderer.invoke("bookmarks:get-for-url", url);
+  },
+  save: async (bookmark) => {
+    return ipcRenderer.invoke("bookmarks:save", bookmark);
+  },
+  delete: async (id) => {
+    return ipcRenderer.invoke("bookmarks:delete", id);
+  },
+  deleteForUrl: async (url) => {
+    return ipcRenderer.invoke("bookmarks:delete-for-url", url);
+  },
+  importFromHtml: async () => {
+    return ipcRenderer.invoke("bookmarks:import-html");
+  },
+  exportToHtml: async () => {
+    return ipcRenderer.invoke("bookmarks:export-html");
+  }
+};
+
+// SITE PERMISSIONS API //
+const sitePermissionsAPI: FlowSitePermissionsAPI = {
+  list: async (profileId) => {
+    return ipcRenderer.invoke("site-permissions:list", profileId);
+  },
+  set: async (profileId, input) => {
+    return ipcRenderer.invoke("site-permissions:set", profileId, input);
+  },
+  remove: async (profileId, id) => {
+    return ipcRenderer.invoke("site-permissions:remove", profileId, id);
+  },
+  clear: async (profileId) => {
+    return ipcRenderer.invoke("site-permissions:clear", profileId);
+  }
+};
+
 // OMNIBOX API //
 const omniboxAPI: FlowOmniboxAPI = {
   show: (bounds: Electron.Rectangle | null, params: OmniboxOpenParams | null) => {
@@ -1250,6 +1305,7 @@ const flowAPI: typeof flow = {
     chooseDownloadDirectory: "settings",
     resetDownloadDirectory: "settings"
   }),
+  bookmarks: wrapAPI(bookmarksAPI, "browser"),
   passkey: wrapAPI(passkeyAPI, "browser"),
   interface: wrapAPI(interfaceAPI, "browser", {
     moveWindowTo: "all",
@@ -1273,6 +1329,7 @@ const flowAPI: typeof flow = {
   icons: wrapAPI(iconsAPI, "settings"),
   openExternal: wrapAPI(openExternalAPI, "settings"),
   onboarding: wrapAPI(onboardingAPI, "settings"),
-  passwords: wrapAPI(passwordsAPI, "settings")
+  passwords: wrapAPI(passwordsAPI, "settings"),
+  sitePermissions: wrapAPI(sitePermissionsAPI, "settings")
 };
 contextBridge.exposeInMainWorld("flow", flowAPI);

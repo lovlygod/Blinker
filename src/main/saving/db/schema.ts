@@ -134,6 +134,50 @@ export const passwords = sqliteTable(
 export type PasswordRow = typeof passwords.$inferSelect;
 export type PasswordInsert = typeof passwords.$inferInsert;
 
+// --- Bookmarks ---
+
+export const bookmarks = sqliteTable(
+  "bookmarks",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    profileId: text("profile_id").notNull(),
+    url: text("url").notNull(),
+    title: text("title").notNull(),
+    folder: text("folder").notNull().default("Bookmarks bar"),
+    faviconUrl: text("favicon_url"),
+    createdAt: integer("created_at").notNull(),
+    updatedAt: integer("updated_at").notNull()
+  },
+  (table) => [
+    index("idx_bookmarks_profile_id").on(table.profileId),
+    uniqueIndex("idx_bookmarks_profile_url").on(table.profileId, table.url)
+  ]
+);
+
+export type BookmarkRow = typeof bookmarks.$inferSelect;
+export type BookmarkInsert = typeof bookmarks.$inferInsert;
+
+// --- Site permissions ---
+
+export const sitePermissions = sqliteTable(
+  "site_permissions",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    profileId: text("profile_id").notNull(),
+    origin: text("origin").notNull(),
+    permission: text("permission").notNull(),
+    setting: text("setting").$type<"allow" | "block" | "ask">().notNull().default("ask"),
+    updatedAt: integer("updated_at").notNull()
+  },
+  (table) => [
+    index("idx_site_permissions_profile_id").on(table.profileId),
+    uniqueIndex("idx_site_permissions_profile_origin_permission").on(table.profileId, table.origin, table.permission)
+  ]
+);
+
+export type SitePermissionRow = typeof sitePermissions.$inferSelect;
+export type SitePermissionInsert = typeof sitePermissions.$inferInsert;
+
 // --- Downloads ---
 
 export const downloads = sqliteTable(

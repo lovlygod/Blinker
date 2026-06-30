@@ -110,6 +110,14 @@ export const STATIC_DOMAINS: StaticDomainInfo[] = [
   },
   {
     protocol: "blinker",
+    hostname: "bookmarks",
+    actual: {
+      type: "route",
+      route: "bookmarks"
+    }
+  },
+  {
+    protocol: "blinker",
     hostname: "downloads",
     actual: {
       type: "route",

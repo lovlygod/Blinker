@@ -59,6 +59,12 @@
   </requires>
 
   <releases>
+    <release version="1.15.0" date="2026-06-30">
+      <url type="details">https://github.com/lovlygod/Blinker/releases/tag/v1.15.0</url>
+      <description>
+        <p>Added bookmarks, improved password autofill, and introduced the Permissions Center.</p>
+      </description>
+    </release>
     <release version="1.14.5" date="2026-06-29">
       <url type="details">https://github.com/lovlygod/Blinker/releases/tag/v1.14.5</url>
       <description>

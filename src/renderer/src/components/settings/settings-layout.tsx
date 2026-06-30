@@ -9,9 +9,21 @@ import { ExternalAppsSettings } from "@/components/settings/sections/external-ap
 import { ShortcutsSettings } from "@/components/settings/sections/shortcuts/section";
 import { PasswordsSettings } from "@/components/settings/sections/passwords/section";
 import { ImportDataSettings } from "@/components/settings/sections/import-data/section";
+import { PermissionsSettings } from "@/components/settings/sections/permissions/section";
 import { SettingsProvider } from "@/components/providers/settings-provider";
 import { AppUpdatesProvider } from "@/components/providers/app-updates-provider";
-import { Globe, DockIcon, UsersIcon, OrbitIcon, BlocksIcon, Info, KeyboardIcon, KeyRound, Import } from "lucide-react";
+import {
+  Globe,
+  DockIcon,
+  UsersIcon,
+  OrbitIcon,
+  BlocksIcon,
+  Info,
+  KeyboardIcon,
+  KeyRound,
+  Import,
+  ShieldCheck
+} from "lucide-react";
 import { ShortcutsProvider } from "@/components/providers/shortcuts-provider";
 import { LANGUAGE_CHANGED_EVENT, t } from "@/lib/i18n";
 
@@ -31,6 +43,7 @@ export function SettingsLayout() {
     { id: "general", label: t("settings.general"), icon: <Globe className="h-4 w-4 mr-2" /> },
     { id: "import-data", label: t("settings.importData"), icon: <Import className="h-4 w-4 mr-2" /> },
     { id: "passwords", label: t("settings.passwords"), icon: <KeyRound className="h-4 w-4 mr-2" /> },
+    { id: "permissions", label: "Разрешения", icon: <ShieldCheck className="h-4 w-4 mr-2" /> },
     { id: "icons", label: t("settings.icon"), icon: <DockIcon className="h-4 w-4 mr-2" /> },
     { id: "profiles", label: t("settings.profiles"), icon: <UsersIcon className="h-4 w-4 mr-2" /> },
     { id: "spaces", label: t("settings.spaces"), icon: <OrbitIcon className="h-4 w-4 mr-2" /> },
@@ -57,6 +70,8 @@ export function SettingsLayout() {
         return <GeneralSettings />;
       case "passwords":
         return <PasswordsSettings />;
+      case "permissions":
+        return <PermissionsSettings />;
       case "import-data":
         return <ImportDataSettings />;
       case "icons":

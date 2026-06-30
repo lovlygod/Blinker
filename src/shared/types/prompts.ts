@@ -61,13 +61,23 @@ interface SavePasswordPromptState extends BasePromptState<"save" | "never" | nul
   candidate: PasswordSaveCandidate;
 }
 
+export type SitePermissionPromptResult = "block" | "allow" | "always";
+
+interface SitePermissionPromptState extends BasePromptState<SitePermissionPromptResult> {
+  type: "site-permission";
+  origin: string;
+  permission: string;
+  permissionLabel: string;
+}
+
 // Combined Prompt States //
 export type PromptState =
   | TextPromptState
   | ConfirmPromptState
   | AlertPromptState
   | BasicAuthPromptState
-  | SavePasswordPromptState;
+  | SavePasswordPromptState
+  | SitePermissionPromptState;
 
 // Renderer Types //
 export type ActivePrompt = DistributiveOmit<PromptState, "promise" | "resolver">;

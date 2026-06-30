@@ -13,6 +13,7 @@ import { FlowNewTabAPI } from "~/flow/interfaces/browser/newTab";
 import { FlowFindInPageAPI } from "~/flow/interfaces/browser/find-in-page";
 import { FlowHistoryAPI } from "~/flow/interfaces/browser/history";
 import { FlowDownloadsAPI } from "~/flow/interfaces/browser/downloads";
+import { FlowBookmarksAPI } from "~/flow/interfaces/browser/bookmarks";
 import { FlowPasskeyAPI } from "~/flow/interfaces/browser/passkey";
 import { FlowPromptsAPI } from "~/flow/interfaces/browser/prompts";
 
@@ -24,6 +25,7 @@ import { FlowIconsAPI } from "~/flow/interfaces/settings/icons";
 import { FlowOpenExternalAPI } from "~/flow/interfaces/settings/openExternal";
 import { FlowOnboardingAPI } from "~/flow/interfaces/settings/onboarding";
 import { FlowPasswordsAPI } from "~/flow/interfaces/settings/passwords";
+import { FlowSitePermissionsAPI } from "~/flow/interfaces/settings/site-permissions";
 import { FlowUpdatesAPI } from "~/flow/interfaces/app/updates";
 import { FlowActionsAPI } from "~/flow/interfaces/app/actions";
 import { FlowShortcutsAPI } from "~/flow/interfaces/app/shortcuts";
@@ -50,6 +52,7 @@ declare global {
     navigation: FlowNavigationAPI;
     history: FlowHistoryAPI;
     downloads: FlowDownloadsAPI;
+    bookmarks: FlowBookmarksAPI;
     interface: FlowInterfaceAPI;
     passkey: FlowPasskeyAPI;
     omnibox: FlowOmniboxAPI;
@@ -67,5 +70,6 @@ declare global {
     openExternal: FlowOpenExternalAPI;
     onboarding: FlowOnboardingAPI;
     passwords: FlowPasswordsAPI;
+    sitePermissions: FlowSitePermissionsAPI;
   };
 }

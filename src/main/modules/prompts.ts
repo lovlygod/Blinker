@@ -115,6 +115,12 @@ export function promptCompleted(promptId: string, result: any, suppress: boolean
         result
       });
       break;
+    case "site-permission":
+      activePrompt.resolver({
+        success: true,
+        result
+      });
+      break;
   }
 
   processPromptQueue();
